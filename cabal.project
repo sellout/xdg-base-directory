@@ -1,0 +1,21 @@
+source-repository-package
+  type: git
+  location: https://github.com/sellout/pathway.git
+  tag: 20209a7a4d7448a1a3033378d5018c2abd15fc37
+  subdir:
+    internal
+    pathway
+    system
+
+flags:
+  -noisy-deprecations
+
+program-options
+  ghc-options:
+    -Werror
+
+tests: True
+
+packages:
+  ./core/xdg-base-directory.cabal
+  ./internal/xdg-base-directory-internal.cabal

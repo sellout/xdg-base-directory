@@ -56,17 +56,21 @@ module XDG.BaseDirectory.Opinionated
 where
 
 import "base" Control.Category ((.))
+import "base" Control.Monad.IO.Class (MonadIO)
 import "base" Data.Bool (Bool (False))
 import "base" Data.Either (Either)
 import "base" Data.Function (flip)
 import qualified "base" Data.Kind as Kind
 import "base" Data.List.NonEmpty (NonEmpty)
 import "base" Data.Maybe (Maybe)
-import "base" System.IO (Handle, IO)
+import "base" System.IO (Handle)
+import "exceptions" Control.Monad.Catch (MonadMask)
 import "pathway" Data.Path (Path, Relativity (Rel), Type (File), (</>))
 import qualified "pathway" Data.Path.Directory as Directory
 import qualified "pathway-system" Filesystem.Path as Dir
 import "these" Data.These (These)
+import "transformers" Control.Monad.Trans.Except (ExceptT)
+import "this" Data.Annotated (Annotated)
 import "this" XDG.BaseDirectory.IO
   ( Aggregate (Config, Data),
     FileError (ConstructionError, IOError),
@@ -75,7 +79,6 @@ import "this" XDG.BaseDirectory.IO
     Target (System, User),
     User (Cache, State),
     WriteError (CreationFailure, FileError),
-    withExecutableFile,
   )
 import qualified "this" XDG.BaseDirectory.IO as XDG
 import "this" XDG.BaseDirectory.Internal (BaseDirectory, Error)
@@ -94,6 +97,7 @@ import "this" XDG.BaseDirectory.Internal (BaseDirectory, Error)
 -- >>> import qualified "filepath" System.FilePath as FP
 -- >>> import "pathway" Data.Path.TH (posix)
 -- >>> import "temporary" System.IO.Temp (createTempDirectory, getCanonicalTemporaryDirectory)
+-- >>> import "transformers" Control.Monad.Trans.Except (runExceptT)
 --
 -- __TODO__: Extract this to a testing package.
 -- __TODO__: Replace all this directory/filepath/temporary stuff with Pathway.
@@ -146,28 +150,33 @@ import "this" XDG.BaseDirectory.Internal (BaseDirectory, Error)
 --
 -- >>> let myprogram = subdirOperations "myprogram" $ pure [posix|/run/whatever/|]
 data Operations (rep :: Kind.Type) = Operations
-  { -- |
+  { -- | Write (or read/write) a file in either the `Cache` or `State` directory.
     --
-    -- >>> withUserFile myprogram State [posix|archive.db|] ReadWriteMode pure
-    -- These (FileError (ConstructionError (Var (...Var "XDG_STATE_HOME"...)) :| []) {handle: .../home/example-user/.local/state/myprogram/archive.db}
+    -- >>> runExceptT $ withUserFile myprogram State [posix|archive.db|] ReadWriteMode pure
+    -- Right (These (FileError (ConstructionError (Var (...Var "XDG_STATE_HOME"...)) :| []) {handle: .../home/example-user/.local/state/myprogram/archive.db})
     withUserFile ::
-      forall a.
+      forall m a.
+      (MonadIO m, MonadMask m) =>
       User ->
       Path ('Rel 'False) 'File rep ->
       IOWriteMode ->
-      (Handle -> IO a) ->
-      IO (These (NonEmpty (WriteError rep)) a),
-    -- |
+      (Handle -> m a) ->
+      ExceptT
+        Dir.MaybeParentCreationFailure
+        m
+        (These (NonEmpty (WriteError rep)) a),
+    -- | Read a file in either the `Cache` or `State` directory.
     --
     -- >>> withUserFileRO myprogram State [posix|archive.db|] pure
-    -- This (ConstructionError (Var (...Var "XDG_STATE_HOME"...) :| [IOError .../home/example-user/.local/state/myprogram/archive.db: withFile: does not exist (No such file or directory)])
+    -- This (ConstructionError (Var (...Var "XDG_STATE_HOME"...) :| [IOError .../home/example-user/.local/state/myprogram/archive.db: openFile: does not exist (No such file or directory)])
     withUserFileRO ::
-      forall a.
+      forall m a.
+      (MonadIO m, MonadMask m) =>
       User ->
       Path ('Rel 'False) 'File rep ->
-      (Handle -> IO a) ->
-      IO (These (NonEmpty (FileError rep)) a),
-    -- | Open all of the associated files. This can only open files for reading.
+      (Handle -> m a) ->
+      m (These (NonEmpty (FileError rep)) a),
+    -- | Open the set of `Config` or `Data` files for reading.
     --   To write to (some of) these files, use `withTargetFile`.
     --
     --        A specification that refers to `$XDG_DATA_DIRS` or
@@ -179,30 +188,46 @@ data Operations (rep :: Kind.Type) = Operations
     --        —[§4](https://specifications.freedesktop.org/basedir-spec/0.8/#referencing)
     --
     -- >>> withAggregateFiles myprogram Config [posix|settings.dhall|] pure
-    -- This [ConstructionError (Var (...Var "XDG_CONFIG_HOME"...),ConstructionError (Var (MissingVar "XDG_CONFIG_DIRS" Nothing)),IOError .../home/example-user/.config/myprogram/settings.dhall: withFile: does not exist (No such file or directory),IOError /etc/xdg/myprogram/settings.dhall: withFile: does not exist (No such file or directory)]
+    -- This [ConstructionError (Var (...Var "XDG_CONFIG_HOME"...),ConstructionError (Var (MissingVar "XDG_CONFIG_DIRS" Nothing)),IOError .../home/example-user/.config/myprogram/settings.dhall: openFile: does not exist (No such file or directory),IOError /etc/xdg/myprogram/settings.dhall: openFile: does not exist (No such file or directory)]
     --
     -- >>> withAggregateFiles myprogram Data [posix|resources/splash.png|] pure
-    -- This [ConstructionError (Var (...Var "XDG_DATA_HOME"...),ConstructionError (Var (...Var "XDG_DATA_DIRS"...),IOError .../home/example-user/.local/share/myprogram/resources/splash.png: withFile: does not exist (No such file or directory),IOError /usr/local/share/myprogram/resources/splash.png: withFile: does not exist (No such file or directory),IOError /usr/share/myprogram/resources/splash.png: withFile: does not exist (No such file or directory)]
+    -- This [ConstructionError (Var (...Var "XDG_DATA_HOME"...),ConstructionError (Var (...Var "XDG_DATA_DIRS"...),IOError .../home/example-user/.local/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory),IOError /usr/local/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory),IOError /usr/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory)]
     withAggregateFiles ::
-      forall a.
+      forall m a.
+      (MonadIO m, MonadMask m) =>
       Aggregate ->
       Path ('Rel 'False) 'File rep ->
-      (NonEmpty Handle -> IO a) ->
-      IO (These [FileError rep] a),
+      (NonEmpty Handle -> m a) ->
+      m (These [FileError rep] a),
     -- | This can only write to the targeted file. To read, use
     --   `withAggregateFiles` to access all of the related files.
     --
-    -- >>> withTargetFile myprogram User Config [posix|settings.dhall|] False pure
-    -- These (FileError (ConstructionError (Var (...Var "XDG_CONFIG_HOME"...)) :| []) {handle: .../home/example-user/.config/myprogram/settings.dhall}
+    --   The available targeted files are
+    -- - `User` `Config`
+    -- - `System` `Config`
+    -- - `User` `Data`
+    -- - `System` `Data`
+    --
+    --  __FIXME__: This should probably use `IOWriteMode`, as we want to be able
+    --             to _modify_ existing files in these places, and there’s no
+    --             guarantee if we use `withAggregateFiles` that we will match
+    --             up with the corresponding file.
+    --
+    -- >>> runExceptT $ withTargetFile myprogram User Config [posix|settings.dhall|] False pure
+    -- Right (These (FileError (ConstructionError (Var (...Var "XDG_CONFIG_HOME"...)) :| []) {handle: .../home/example-user/.config/myprogram/settings.dhall})
     withTargetFile ::
-      forall a.
+      forall m a.
+      (MonadIO m, MonadMask m) =>
       Target ->
       Aggregate ->
       Path ('Rel 'False) 'File rep ->
       Bool ->
-      (Handle -> IO a) ->
-      IO (These (NonEmpty (WriteError rep)) a),
-    -- |
+      (Handle -> m a) ->
+      ExceptT
+        Dir.MaybeParentCreationFailure
+        m
+        (These (NonEmpty (WriteError rep)) a),
+    -- | Open a temporary file for writing (or read/write).
     --
     --       If @$XDG_RUNTIME_DIR@ is not set applications should fall back to a
     --       replacement directory with similar capabilities and print a warning
@@ -212,22 +237,38 @@ data Operations (rep :: Kind.Type) = Operations
     --       be swapped out to disk.
     --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
     --
-    -- >>> withRuntimeFile myprogram [posix|super-secret.age|] ReadWriteMode Nothing (const $ pure ()) pure
-    -- This (Right (FileError (ConstructionError (Var (...Var "XDG_RUNTIME_DIR"...))) :| [Left InvalidLifetime])
+    -- >>> runExceptT $ withRuntimeFile myprogram [posix|super-secret.age|] ReadWriteMode Nothing (const $ pure ()) pure
+    -- Right (This (Right (FileError (ConstructionError (Var (...Var "XDG_RUNTIME_DIR"...))) :| [Left InvalidLifetime]))
     withRuntimeFile ::
-      forall a.
+      forall m a.
+      (MonadIO m, MonadMask m) =>
       Path ('Rel 'False) 'File rep ->
       IOWriteMode ->
       Maybe Bool ->
-      (Error rep -> IO ()) ->
-      (Handle -> IO a) ->
-      IO (These (NonEmpty (Either (InvalidRuntimeDir rep) (WriteError rep))) a),
+      (Error rep -> m ()) ->
+      (Handle -> m a) ->
+      ExceptT
+        Dir.MaybeParentCreationFailure
+        m
+        (These (NonEmpty (Either (InvalidRuntimeDir rep) (WriteError rep))) a),
+    -- | Open a temporary file read-only.
     withRuntimeFileRO ::
-      forall a.
+      forall m a.
+      (MonadIO m, MonadMask m) =>
       Path ('Rel 'False) 'File rep ->
-      (Error rep -> IO ()) ->
-      (Handle -> IO a) ->
-      IO (These (NonEmpty (Either (InvalidRuntimeDir rep) (FileError rep))) a)
+      (Error rep -> m ()) ->
+      (Handle -> m a) ->
+      m (These (NonEmpty (Either (InvalidRuntimeDir rep) (FileError rep))) a),
+    withExecutableFile ::
+      forall m a.
+      (MonadIO m, MonadMask m) =>
+      Dir.PathComponent ->
+      Bool ->
+      (Handle -> m a) ->
+      ExceptT
+        Dir.MaybeParentCreationFailure
+        m
+        (Annotated () (Either (FileError Dir.PathComponent) a))
   }
 
 type role Operations nominal
@@ -235,9 +276,12 @@ type role Operations nominal
 -- | This is the recommended interface with this library. You can call this
 --   function once and then use the members throughout your program.
 --
+--  __NB__: `withExecutableFile` doesn’t use the program subdirectory.
+--
 -- >>> myprogram = subdirOperations "myprogram" $ pure [posix|/run/whatever/|]
 subdirOperations ::
-  -- | The program directory component.
+  -- | The program directory component. This is the subdirectory to restrict
+  --   everything to within each XDG base directory.
   Dir.PathComponent ->
   -- | A fallback directory to use for `withRuntimeFile` and `withRuntimeFileRO`
   --   if `$XDG_RUNTIME_DIR` isn’t set. If this is `Nothing`, then
@@ -269,5 +313,6 @@ subdirOperations subdir runtimeFallback =
               (injectSubdir XDG.withRuntimeFile filename mode)
               runtimeFallback,
           withRuntimeFileRO = \filename ->
-            injectSubdir XDG.withRuntimeFileRO filename runtimeFallback
+            injectSubdir XDG.withRuntimeFileRO filename runtimeFallback,
+          withExecutableFile = XDG.withExecutableFile
         }

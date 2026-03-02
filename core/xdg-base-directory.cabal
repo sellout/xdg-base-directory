@@ -197,6 +197,7 @@ library
     src
   build-depends:
     comonad,
+    exceptions,
     pathway,
     pathway-system,
     these,

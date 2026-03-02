@@ -197,6 +197,7 @@ library
     src
   build-depends:
     directory,
+    exceptions,
     filepath,
     pathway,
     pathway-internal,

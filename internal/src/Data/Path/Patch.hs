@@ -13,6 +13,7 @@ where
 
 import "base" Control.Applicative (pure)
 import "base" Control.Category ((.))
+import "base" Control.Monad.IO.Class (MonadIO)
 import "base" Data.Bool (Bool (False, True))
 import "base" Data.Foldable (foldMap, foldl, toList)
 import "base" Data.Function (flip, ($))
@@ -23,7 +24,8 @@ import "base" Data.Ord (Ord)
 import "base" Data.Proxy (Proxy (Proxy))
 import "base" Data.Semigroup ((<>))
 import "base" Numeric.Natural (Natural)
-import "base" System.IO (Handle, IO, IOMode)
+import "base" System.IO (Handle, IOMode)
+import "exceptions" Control.Monad.Catch (MonadMask)
 import "pathway" Data.Path (Type (Dir, File))
 import qualified "pathway" Data.Path as Path
 import qualified "pathway" Data.Path.Directory as Directory
@@ -143,10 +145,10 @@ localFormat =
 --
 --  __TODO__: Move this upstream.
 withFile ::
-  forall rep a.
-  (System.Rep rep, Ord rep) =>
+  forall m rep a.
+  (MonadIO m, MonadMask m, System.Rep rep, Ord rep) =>
   Path 'Rel.Abs 'File rep ->
   IOMode ->
-  (Handle -> IO a) ->
-  IO a
+  (Handle -> m a) ->
+  m a
 withFile = System.withFile . serialize localFormat

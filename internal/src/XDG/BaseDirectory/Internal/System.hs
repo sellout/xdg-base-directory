@@ -11,8 +11,10 @@ module XDG.BaseDirectory.Internal.System
 where
 
 import safe "base" Control.Category (id)
+import "base" Control.Monad.IO.Class (MonadIO, liftIO)
 import safe "base" Data.Bool (Bool)
 import safe qualified "base" Data.Char as Base
+import safe "base" Data.Function (($))
 import safe qualified "base" Data.Kind as Kind
 import safe "base" Data.Maybe (Maybe)
 import safe "base" Data.String (String)
@@ -20,6 +22,7 @@ import safe qualified "base" System.Environment as F.Env
 import safe "base" System.IO (Handle, IO, IOMode)
 import safe qualified "base" System.IO as F.IO
 import qualified "directory" System.Directory as F.Dir
+import "exceptions" Control.Monad.Catch (MonadMask, bracket)
 import safe qualified "filepath" System.FilePath as F.Path
 
 -- TODO: `OsString` was introduced in filepath-1.4.100, but there was no
@@ -35,6 +38,12 @@ import qualified "file-io" System.File.OsPath as O.IO
 import "filepath" System.OsPath (OsString, OsChar)
 import qualified "filepath" System.OsPath as O.Path
 #endif
+
+withFile' ::
+  (MonadIO m, MonadMask m) =>
+  (a -> IOMode -> IO Handle) -> a -> IOMode -> (Handle -> m r) -> m r
+withFile' openFile filePath mode =
+  bracket (liftIO $ openFile filePath mode) $ liftIO . F.IO.hClose
 
 -- | This wraps the underlying operations we use, so we can parameterize over
 --   string types.
@@ -53,7 +62,10 @@ class Rep (a :: Kind.Type) where
   splitDrive :: a -> (a, a)
   splitFileName :: a -> (a, a)
   splitSearchPath :: a -> [a]
-  withFile :: a -> IOMode -> (Handle -> IO r) -> IO r
+
+  -- | This type is generalized from the actual system type.
+  withFile :: (MonadIO m, MonadMask m) => a -> IOMode -> (Handle -> m r) -> m r
+
   (</>) :: a -> a -> a
 
 instance Rep String where
@@ -71,7 +83,7 @@ instance Rep String where
   splitDrive = F.Path.splitDrive
   splitFileName = F.Path.splitFileName
   splitSearchPath = F.Path.splitSearchPath
-  withFile = F.IO.withFile
+  withFile = withFile' F.IO.openFile
   (</>) = (F.Path.</>)
 
 #if MIN_VERSION_filepath(1, 4, 100)
@@ -90,6 +102,6 @@ instance Rep OsString where
   splitDrive = O.Path.splitDrive
   splitFileName = O.Path.splitFileName
   splitSearchPath = O.Path.splitSearchPath
-  withFile = O.IO.withFile
+  withFile = withFile' O.IO.openFile
   (</>) = (O.Path.</>)
 #endif

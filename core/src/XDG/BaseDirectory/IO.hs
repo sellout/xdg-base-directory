@@ -64,8 +64,8 @@ where
 
 import "base" Control.Applicative (liftA2, pure)
 import "base" Control.Category (id, (.))
-import "base" Control.Exception (try)
-import "base" Control.Monad (join, (<=<), (=<<))
+import "base" Control.Monad (Monad, join, (<=<), (=<<))
+import "base" Control.Monad.IO.Class (MonadIO, liftIO)
 import "base" Data.Bifunctor (first)
 import "base" Data.Bool (Bool (False), bool)
 import "base" Data.Data (Data)
@@ -91,12 +91,14 @@ import qualified "base" System.IO as IO
 import "base" System.IO.Error (IOError)
 import "base" Text.Read (Read)
 import "base" Text.Show (Show)
+import "exceptions" Control.Monad.Catch (MonadMask, try)
 import "pathway" Data.Path (Path, Relativity (Rel), Type (File), (</>))
 import qualified "pathway" Data.Path.Directory as Directory
 import qualified "pathway" Data.Path.File as File
 import qualified "pathway-system" Filesystem.Path as Dir
 import "these" Data.These (These (That, These, This))
-import "transformers" Control.Monad.Trans.Except (runExceptT)
+import "transformers" Control.Monad.Trans.Class (lift)
+import "transformers" Control.Monad.Trans.Except (ExceptT (ExceptT), runExceptT)
 import qualified "xdg-base-directory-internal" Data.Path.Patch as Patch
 import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
 import "this" Data.Annotated (Annotated (NotBut, Noted))
@@ -327,36 +329,41 @@ verifyRuntimeDir dir =
 --
 --       —[§4](https://specifications.freedesktop.org/basedir-spec/latest/#referencing)
 withFile ::
+  (MonadIO m, MonadMask m) =>
   Path ('Rel 'False) 'File Dir.PathComponent ->
   IOWriteMode ->
-  (Handle -> IO a) ->
+  (Handle -> m a) ->
   BaseDirectory Dir.PathComponent ->
-  IO (Either IOError a)
+  ExceptT Dir.MaybeParentCreationFailure m (Either IOError a)
 withFile filename mode action base = do
   let filepath = base </> filename
-  -- FIXME: Don’t discard the error here
-  _ <- runExceptT . Dir.createDirectoryWithParentsIfMissing $ File.directory filepath
-  try $ Patch.withFile filepath (resolveIOWriteMode mode) action
+  ExceptT . liftIO . runExceptT . Dir.createDirectoryWithParentsIfMissing $
+    File.directory filepath
+  lift . try $ Patch.withFile filepath (resolveIOWriteMode mode) action
 
 withFileRO ::
-  (System.Rep rep, Ord rep) =>
+  (MonadIO m, MonadMask m, System.Rep rep, Ord rep) =>
   Path ('Rel 'False) 'File rep ->
-  (Handle -> IO a) ->
+  (Handle -> m a) ->
   BaseDirectory rep ->
-  IO (Either IOError a)
+  m (Either IOError a)
 withFileRO filename =
   ((try .) .) . flip $ flip Patch.withFile IO.ReadMode . (</> filename)
 
 -- |
 --
--- >>> withUserFile State [posix|myprogram/archive.db|] ReadWriteMode pure
--- These (FileError (ConstructionError (Var (...Var "XDG_STATE_HOME"...)) :| []) {handle: .../home/example-user/.local/state/myprogram/archive.db}
+-- >>> runExceptT $ withUserFile State [posix|myprogram/archive.db|] ReadWriteMode pure
+-- Right (These (FileError (ConstructionError (Var (...Var "XDG_STATE_HOME"...)) :| []) {handle: .../home/example-user/.local/state/myprogram/archive.db})
 withUserFile ::
+  (MonadIO m, MonadMask m) =>
   User ->
   Path ('Rel 'False) 'File Dir.PathComponent ->
   IOWriteMode ->
-  (Handle -> IO a) ->
-  IO (These (NonEmpty (WriteError Dir.PathComponent)) a)
+  (Handle -> m a) ->
+  ExceptT
+    Dir.MaybeParentCreationFailure
+    m
+    (These (NonEmpty (WriteError Dir.PathComponent)) a)
 withUserFile user filename mode action =
   fmap joinThese
     . traverse
@@ -364,24 +371,26 @@ withUserFile user filename mode action =
           . withFile filename mode action
       )
     . first (FileError . ConstructionError <$>)
-    =<< resolveUser user
+    <=< liftIO
+    $ resolveUser user
 
 -- |
 --
 -- >>> withUserFileRO State [posix|myprogram/archive.db|] pure
--- This (ConstructionError (Var (...Var "XDG_STATE_HOME"...) :| [IOError .../home/example-user/.local/state/myprogram/archive.db: withFile: does not exist (No such file or directory)])
+-- This (ConstructionError (Var (...Var "XDG_STATE_HOME"...) :| [IOError .../home/example-user/.local/state/myprogram/archive.db: openFile: does not exist (No such file or directory)])
 withUserFileRO ::
+  (MonadIO m, MonadMask m) =>
   User ->
   Path ('Rel 'False) 'File Dir.PathComponent ->
-  (Handle -> IO a) ->
-  IO (These (NonEmpty (FileError Dir.PathComponent)) a)
+  (Handle -> m a) ->
+  m (These (NonEmpty (FileError Dir.PathComponent)) a)
 withUserFileRO user filename action =
   fmap joinThese
     . traverse
       ( fmap (weakenEither . first (pure . IOError))
           . withFileRO filename action
       )
-    <=< fmap (first $ fmap ConstructionError)
+    <=< liftIO . fmap (first $ fmap ConstructionError)
     $ resolveUser user
 
 -- | Open all of the associated files.
@@ -398,11 +407,12 @@ withUserFileRO user filename action =
 --        —[§4](https://specifications.freedesktop.org/basedir-spec/0.8/#referencing)
 --
 -- >>> withAggregateFiles Config [posix|myprogram/settings.dhall|] pure
--- This [ConstructionError (Var (...Var "XDG_CONFIG_HOME"...),ConstructionError (Var (MissingVar "XDG_CONFIG_DIRS" Nothing)),IOError .../home/example-user/.config/myprogram/settings.dhall: withFile: does not exist (No such file or directory),IOError /etc/xdg/myprogram/settings.dhall: withFile: does not exist (No such file or directory)]
+-- This [ConstructionError (Var (...Var "XDG_CONFIG_HOME"...),ConstructionError (Var (MissingVar "XDG_CONFIG_DIRS" Nothing)),IOError .../home/example-user/.config/myprogram/settings.dhall: openFile: does not exist (No such file or directory),IOError /etc/xdg/myprogram/settings.dhall: openFile: does not exist (No such file or directory)]
 --
 -- >>> withAggregateFiles Data [posix|myprogram/resources/splash.png|] pure
--- This [ConstructionError (Var (...Var "XDG_DATA_HOME"...),ConstructionError (Var (...Var "XDG_DATA_DIRS"...),IOError .../home/example-user/.local/share/myprogram/resources/splash.png: withFile: does not exist (No such file or directory),IOError /usr/local/share/myprogram/resources/splash.png: withFile: does not exist (No such file or directory),IOError /usr/share/myprogram/resources/splash.png: withFile: does not exist (No such file or directory)]
+-- This [ConstructionError (Var (...Var "XDG_DATA_HOME"...),ConstructionError (Var (...Var "XDG_DATA_DIRS"...),IOError .../home/example-user/.local/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory),IOError /usr/local/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory),IOError /usr/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory)]
 withAggregateFiles ::
+  (MonadIO m, MonadMask m) =>
   -- | What kinds of files we are reading.
   Aggregate ->
   -- | Path to the desired file, relative to the project prefixes.
@@ -410,28 +420,32 @@ withAggregateFiles ::
   -- | An action that is given the list of handles we are reading from. The
   --   handles are in order of decreasing importance, so the ones after the
   --   first can be dropped, or otherwise have earlier ones layered on them.
-  (NonEmpty Handle -> IO a) ->
-  IO (These [FileError Dir.PathComponent] a)
+  (NonEmpty Handle -> m a) ->
+  m (These [FileError Dir.PathComponent] a)
 withAggregateFiles aggregate filename action =
   fmap joinThese
-    . traverse
-      (fmap (first (IOError <$>)) . foldDirs filename action)
+    . traverse (fmap (first (IOError <$>)) . foldDirs filename action)
     . first (toList . fmap ConstructionError)
     . weakenAnnotated
-    =<< resolveAggregate aggregate
+    <=< liftIO
+    $ resolveAggregate aggregate
 
 -- | This can only write to the targeted file. To read, use `withAggregateFiles`
 --   to access all of the related files.
 --
--- >>> withTargetFile User Config [posix|myprogram/settings.dhall|] False pure
--- These (FileError (ConstructionError (Var (...Var "XDG_CONFIG_HOME"...)) :| []) {handle: .../home/example-user/.config/myprogram/settings.dhall}
+-- >>> runExceptT $ withTargetFile User Config [posix|myprogram/settings.dhall|] False pure
+-- Right (These (FileError (ConstructionError (Var (...Var "XDG_CONFIG_HOME"...)) :| []) {handle: .../home/example-user/.config/myprogram/settings.dhall})
 withTargetFile ::
+  (MonadIO m, MonadMask m) =>
   Target ->
   Aggregate ->
   Path ('Rel 'False) 'File Dir.PathComponent ->
   Bool ->
-  (Handle -> IO a) ->
-  IO (These (NonEmpty (WriteError Dir.PathComponent)) a)
+  (Handle -> m a) ->
+  ExceptT
+    Dir.MaybeParentCreationFailure
+    m
+    (These (NonEmpty (WriteError Dir.PathComponent)) a)
 withTargetFile target aggregate filename truncate action =
   fmap joinThese
     . traverse
@@ -442,16 +456,20 @@ withTargetFile target aggregate filename truncate action =
             action
       )
     . first (FileError . ConstructionError <$>)
-    =<< resolveTarget target aggregate
+    <=< liftIO
+    $ resolveTarget target aggregate
 
--- |
+-- | This unifies the complex @XDG_RUNTIME_FILE@ handling, which is then exposed
+--   via two different functions.
 --
 -- * toggle sticky bit when we open/close
 withRuntimeFile' ::
+  (MonadIO m, Monad m') =>
+  (forall x. m x -> m' x) ->
   ( Path ('Rel 'False) 'File Dir.PathComponent ->
-    (Handle -> IO a) ->
+    (Handle -> m a) ->
     BaseDirectory Dir.PathComponent ->
-    IO (Either IOError a)
+    m' (Either IOError a)
   ) ->
   (FileError Dir.PathComponent -> w) ->
   -- | This function sets the sticky bit on any created file while it’s
@@ -481,10 +499,10 @@ withRuntimeFile' ::
   --       replacement directory with similar capabilities and print a warning
   --       message.
   --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
-  (Error Dir.PathComponent -> IO ()) ->
-  (Handle -> IO a) ->
-  IO (These (NonEmpty (Either (InvalidRuntimeDir Dir.PathComponent) w)) a)
-withRuntimeFile' wf liftErr _preserve filename fallback warning action =
+  (Error Dir.PathComponent -> m ()) ->
+  (Handle -> m a) ->
+  m' (These (NonEmpty (Either (InvalidRuntimeDir Dir.PathComponent) w)) a)
+withRuntimeFile' liftM wf liftErr _preserve filename fallback warning action =
   ( fmap joinThese
       . traverse
         ( fmap (weakenEither . first (pure . pure . liftErr . IOError))
@@ -497,24 +515,27 @@ withRuntimeFile' wf liftErr _preserve filename fallback warning action =
               --   preserve
         )
       . joinThese
-      <=< traverse
-        -- TODO: This should warn if we’re only reading the file (or is that not
-        --       good enough?)
-        ( fmap (weakenEither . first (pure . Left))
-            . getCompose
-            . tracing (Compose . verifyRuntimeDir)
-        )
-      <=< either
-        ( \e ->
-            maybe
-              (This . pure . pure . liftErr $ ConstructionError e)
-              (These . pure . pure . liftErr $ ConstructionError e)
-              fallback
-              <$ warning e
-        )
-        (pure . pure)
+      <=< liftM
+        . ( traverse
+              -- TODO: This should warn if we’re only reading the file (or is that not
+              --       good enough?)
+              ( fmap (weakenEither . first (pure . Left))
+                  . getCompose
+                  . tracing (Compose . liftIO . verifyRuntimeDir)
+              )
+              <=< either
+                ( \e ->
+                    maybe
+                      (This . pure . pure . liftErr $ ConstructionError e)
+                      (These . pure . pure . liftErr $ ConstructionError e)
+                      fallback
+                      <$ warning e
+                )
+                (pure . pure)
+          )
   )
-    =<< runtimeDir
+    <=< liftM
+    $ liftIO runtimeDir
 
 -- |
 --
@@ -552,41 +573,64 @@ withRuntimeFile' wf liftErr _preserve filename fallback warning action =
 --       to disk.
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
 --
--- >>> withRuntimeFile [posix|myprogram/super-secret.age|] ReadWriteMode Nothing (pure [posix|/run/whatever/|]) (const $ pure ()) pure
--- This (Right (FileError (ConstructionError (Var (...Var "XDG_RUNTIME_DIR"...))) :| [Left InvalidLifetime])
+-- >>> runExceptT $ withRuntimeFile [posix|myprogram/super-secret.age|] ReadWriteMode Nothing (pure [posix|/run/whatever/|]) (const $ pure ()) pure
+-- Right (This (Right (FileError (ConstructionError (Var (...Var "XDG_RUNTIME_DIR"...))) :| [Left InvalidLifetime]))
 withRuntimeFile ::
+  (MonadIO m, MonadMask m) =>
   Path ('Rel 'False) 'File Dir.PathComponent ->
   IOWriteMode ->
   Maybe Bool ->
   Maybe (BaseDirectory Dir.PathComponent) ->
-  (Error Dir.PathComponent -> IO ()) ->
-  (Handle -> IO a) ->
-  IO (These (NonEmpty (Either (InvalidRuntimeDir Dir.PathComponent) (WriteError Dir.PathComponent))) a)
+  (Error Dir.PathComponent -> m ()) ->
+  (Handle -> m a) ->
+  ExceptT
+    Dir.MaybeParentCreationFailure
+    m
+    ( These
+        ( NonEmpty
+            ( Either
+                (InvalidRuntimeDir Dir.PathComponent)
+                (WriteError Dir.PathComponent)
+            )
+        )
+        a
+    )
 withRuntimeFile filename mode preserve =
-  withRuntimeFile' (flip withFile mode) FileError preserve filename
+  withRuntimeFile' lift (flip withFile mode) FileError preserve filename
 
 -- |
 --
 -- >>> withRuntimeFileRO [posix|myprogram/super-secret.age|] (pure [posix|/run/whatever/|]) (const $ pure ()) pure
 -- This (Right (ConstructionError (Var (...Var "XDG_RUNTIME_DIR"...)) :| [Left InvalidLifetime])
 withRuntimeFileRO ::
+  (MonadIO m, MonadMask m) =>
   Path ('Rel 'False) 'File Dir.PathComponent ->
   Maybe (BaseDirectory Dir.PathComponent) ->
-  (Error Dir.PathComponent -> IO ()) ->
-  (Handle -> IO a) ->
-  IO (These (NonEmpty (Either (InvalidRuntimeDir Dir.PathComponent) (FileError Dir.PathComponent))) a)
-withRuntimeFileRO = withRuntimeFile' withFileRO id Nothing
+  (Error Dir.PathComponent -> m ()) ->
+  (Handle -> m a) ->
+  m
+    ( These
+        ( NonEmpty
+            ( Either
+                (InvalidRuntimeDir Dir.PathComponent)
+                (FileError Dir.PathComponent)
+            )
+        )
+        a
+    )
+withRuntimeFileRO = withRuntimeFile' id withFileRO id Nothing
 
 -- | Apply an action to the same file in each directory.
 foldDirs ::
+  (MonadIO m, MonadMask m) =>
   (System.Rep rep, Ord rep) =>
   Path ('Rel 'False) 'File rep ->
-  (NonEmpty Handle -> IO a) ->
+  (NonEmpty Handle -> m a) ->
   NonEmpty (BaseDirectory rep) ->
   -- |
   --
-  --  __TODO__: Rewrite this so we have a `These (NonEmpty IOError at the end)`
-  IO (These [IOError] a)
+  --  __FIXME__: Rewrite this so we have a @`These` (`NonEmpty` `IOError`)@ at the end.
+  m (These [IOError] a)
 foldDirs filename action dirs =
   foldr
     ( \dir act others ->
@@ -605,17 +649,21 @@ foldDirs filename action dirs =
 --       environment variable, at an appropriate place.
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
 --
--- >>> withExecutableFile "some-script.sh" True pure
--- NotBut (Right {handle: .../home/example-user/.local/bin/some-script.sh})
+-- >>> runExceptT $ withExecutableFile "some-script.sh" True pure
+-- Right (NotBut (Right {handle: .../home/example-user/.local/bin/some-script.sh}))
 withExecutableFile ::
+  (MonadIO m, MonadMask m) =>
   -- | The name of the executable to write.
   Dir.PathComponent ->
   -- | Whether the file should be truncated (`True` → `IO.WriteMode`,
   --   `False` → `IO.AppendMode`).
   Bool ->
-  (Handle -> IO a) ->
+  (Handle -> m a) ->
   -- | Returns @`Noted` ()@ if @$HOME/.local/bin/@ isn’t on @PATH@.
-  IO (Annotated () (Either (FileError Dir.PathComponent) a))
+  ExceptT
+    Dir.MaybeParentCreationFailure
+    m
+    (Annotated () (Either (FileError Dir.PathComponent) a))
 withExecutableFile filename truncate action =
   -- TODO: Ensure the file is actually executable
   -- TODO: Warn if `binDir` isn’t on Path
@@ -628,7 +676,7 @@ withExecutableFile filename truncate action =
             action
       )
       . first ConstructionError
-      =<< binDir
+      =<< liftIO binDir
 
 -- |
 --

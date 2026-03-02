@@ -16,6 +16,7 @@ import "base" Control.Category ((.))
 import "base" Data.Bool (Bool (False, True))
 import "base" Data.Foldable (foldMap, foldl, toList)
 import "base" Data.Function (flip, ($))
+import qualified "base" Data.Kind as Kind
 import "base" Data.List (reverse)
 import "base" Data.Monoid (mempty)
 import "base" Data.Ord (Ord)
@@ -42,7 +43,9 @@ import "yaya" Yaya.Fold (cata, cata2, embed)
 import "yaya" Yaya.Fold.Common (takeAvailable)
 import qualified "this" XDG.BaseDirectory.Internal.System as System
 
-data AnchoredType typ rep
+type role AnchoredType nominal nominal
+
+data AnchoredType (typ :: Type) (rep :: Kind.Type)
   = Abs (Path 'Rel.Abs typ rep)
   | Rel (Path ('Rel.Rel 'False) typ rep)
   | Reparented (Path ('Rel.Rel 'True) typ rep)

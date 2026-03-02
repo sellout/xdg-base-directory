@@ -11,7 +11,7 @@ module XDG.BaseDirectory.Internal
   )
 where
 
-import "base" Control.Applicative (pure)
+import "base" Control.Applicative (empty, pure)
 import "base" Control.Category ((.))
 import "base" Control.Exception (tryJust)
 import "base" Control.Monad ((=<<))
@@ -21,7 +21,8 @@ import "base" Data.Eq (Eq)
 import "base" Data.Foldable (Foldable)
 import "base" Data.Function (($))
 import "base" Data.Functor (Functor, fmap)
-import "base" Data.Maybe (Maybe (Nothing), maybe)
+import qualified "base" Data.Kind as Kind
+import "base" Data.Maybe (Maybe, maybe)
 import "base" Data.Traversable (Traversable)
 import "base" Data.Void (Void)
 import "base" GHC.Generics (Generic, Generic1)
@@ -36,27 +37,43 @@ import "transformers" Control.Monad.Trans.Except (runExceptT)
 import qualified "xdg-base-directory-internal" Data.Path.Patch as Patch
 import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
 
-data VarError rep = MissingVar rep (Maybe IOError) | EmptyVar rep
-  deriving stock (Eq, Generic, Show, Foldable, Functor, Generic1, Traversable)
+-- |
+--
+--  __NB__: This is lacking `Ord` and `Read` instances because `IOError` is
+--          missing them.
+data VarError (rep :: Kind.Type)
+  = MissingVar rep (Maybe IOError)
+  | EmptyVar rep
+  deriving stock (Eq, Generic, Show)
+  deriving stock (Foldable, Functor, Generic1, Traversable)
 
-data Error rep
+type role VarError representational
+
+-- |
+--
+--  __NB__: This is lacking `Ord` and `Read` instances because
+--          `Dir.InternalFailure` is missing them.
+data Error (rep :: Kind.Type)
   = Var (VarError rep)
   | NoDirectoriesFound -- only for directory lists
   | RelativeDirectory
   | Pathway (Dir.InternalFailure Dir.PathRep Void)
-  deriving stock (Eq, Generic, Show, Foldable, Functor, Generic1, Traversable)
+  deriving stock (Eq, Generic, Show)
+  deriving stock (Foldable, Functor, Generic1, Traversable)
+
+type role Error representational
 
 -- |
 --
 --       All paths set in these environment variables must be absolute.
 --       —[§2](https://specifications.freedesktop.org/basedir-spec/latest/#basics)
-type BaseDirectory = Path 'Abs 'Dir
+type BaseDirectory = Path 'Abs 'Dir :: Kind.Type -> Kind.Type
 
 getAbs :: Patch.AnchoredType typ rep -> Maybe (Path 'Abs typ rep)
 getAbs = \case
   Patch.Abs abs -> pure abs
-  Patch.Rel _ -> Nothing
-  Patch.Reparented _ -> Nothing
+  Patch.Rel _ -> empty
+  Patch.Reparented _ -> empty
 
 note :: e -> Maybe a -> Either e a
 note e = maybe (Left e) pure
@@ -80,6 +97,6 @@ getHomeDirectory =
             then
               pure . Var . MissingVar (System.fromStringLiteral "HOME") $
                 pure e
-            else Nothing
+            else empty
       )
     $ runExceptT Dir.getHomeDirectory

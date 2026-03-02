@@ -28,16 +28,29 @@ where
 import "base" Control.Applicative (pure)
 import "base" Control.Category ((.))
 import "base" Control.Monad ((<=<))
+import "base" Data.Data (Data)
 import "base" Data.Either (Either (Left))
+import "base" Data.Eq (Eq)
+import "base" Data.Foldable (Foldable)
 import "base" Data.Function (($))
-import "base" Data.Functor ((<$>))
+import "base" Data.Functor (Functor, (<$>))
+import qualified "base" Data.Kind as Kind
 import "base" Data.Maybe (Maybe (Nothing))
+import "base" Data.Ord (Ord)
 import "base" Data.String (String)
+import "base" Data.Traversable (Traversable)
+import "base" GHC.Generics (Generic, Generic1)
 import "base" System.IO (IO)
+import "base" Text.Read (Read)
+import "base" Text.Show (Show)
 import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
 import "this" XDG.BaseDirectory.Internal (VarError (EmptyVar, MissingVar), note)
 
-newtype EnvironmentVariable rep = EnvVar rep
+newtype EnvironmentVariable (rep :: Kind.Type) = EnvVar rep
+  deriving stock (Data, Eq, Generic, Ord, Read, Show)
+  deriving stock (Foldable, Functor, Generic1, Traversable)
+
+type role EnvironmentVariable representational
 
 envVar :: (System.Rep rep) => String -> EnvironmentVariable rep
 envVar = EnvVar . System.fromStringLiteral
@@ -53,7 +66,14 @@ lookupNonEmptyEnv (EnvVar varName) =
   )
     <$> System.lookupEnv varName
 
-dataHome, configHome, stateHome, dataDirs, configDirs, cacheHome, runtimeDir :: (System.Rep rep) => EnvironmentVariable rep
+dataHome,
+  configHome,
+  stateHome,
+  dataDirs,
+  configDirs,
+  cacheHome,
+  runtimeDir ::
+    (System.Rep rep) => EnvironmentVariable rep
 
 -- |
 --
@@ -128,7 +148,17 @@ cacheHome = envVar "XDG_CACHE_HOME"
 runtimeDir = envVar "XDG_RUNTIME_DIR"
 
 -- FIXME: These are GNU make variables, the values should be populated at compile time.
---        See https://www.gnu.org/prep/standards/html_node/Directory-Variables.html
+--        See https://www.gnu.org/prep/standards/html_node/Directory-Variables.html,
+--        https://cabal.readthedocs.io/en/3.2/developing-packages.html#accessing-data-files-from-package-code
+--
+--        We should probably have the application provide
+--        `Paths_<app>.getDataDir` and `Paths_<app>.getSysConfDir` when it sets
+--        everything up.
+--
+--        Maybe we can use ImplicitParams for these?
+--
+--        No answers, but see
+--        https://stackoverflow.com/questions/66215545/hardcode-datadir-path-upon-installing-executable
 
 datadir, sysconfdir :: (System.Rep rep) => EnvironmentVariable rep
 datadir = envVar "datadir"

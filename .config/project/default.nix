@@ -1,41 +1,31 @@
+### All available options for this file are listed in
+### https://sellout.github.io/project-manager/options.xhtml
 {
   config,
-  flaky,
   lib,
-  pkgs,
   self,
-  supportedSystems,
   ...
 }: {
   project = {
     name = "xdg-base-directory";
     summary = "A faithful implementation of the XDG Base Directory spec";
+    ## TODO: Move something like this to Flaky.
+    file = let
+      copyLicenses = dir: {
+        "${dir}/LICENSE".source = ../../LICENSE;
+        "${dir}/LICENSE.AGPL-3.0-only".source = ../../LICENSE.AGPL-3.0-only;
+        "${dir}/LICENSE.Universal-FOSS-exception-1.0".source =
+          ../../LICENSE.Universal-FOSS-exception-1.0;
+        "${dir}/LICENSE.proprietary".source = ../../LICENSE.proprietary;
+      };
+    in
+      copyLicenses "core"
+      // copyLicenses "internal";
   };
 
   imports = [./hlint.nix];
 
-  ## dependency management
-  services.renovate.enable = true;
-
-  ## development
-  programs = {
-    direnv.enable = true;
-    # This should default by whether there is a .git file/dir (and whether it’s
-    # a file (worktree) or dir determines other things – like where hooks
-    # are installed.
-    git.enable = true;
-  };
-
-  ## formatting
-  editorconfig.enable = true;
-
-  programs = {
-    treefmt.enable = true;
-    vale.enable = true;
-  };
-
   ## CI
-  services.garnix.enable = true;
   ## FIXME: Shouldn’t need `mkForce` here (or to duplicate the base contexts).
   ##        Need to improve module merging.
   services.github.settings.branches.main.protection.required_status_checks.contexts =
@@ -46,24 +36,45 @@
         "check-licenses"
       ]
       ++ lib.concatMap (sys:
-        lib.concatMap (ghc: [
-          "build (${ghc}, ${sys})"
-          "build (--prefer-oldest, ${ghc}, ${sys})"
-        ])
+        lib.concatMap (ghc:
+          ## Don’t add `exclude`d matrix entries to the required list
+          ##
+          ## TODO: Make this less manual (like the `include` component).
+            if
+              ## GHC before 8.4 needs an older Ubuntu
+              lib.versionOlder ghc "8.4"
+              && sys == "ubuntu-24.04"
+              ## GHC doesn’t support ARM before GHC 9.2.
+              || lib.versionOlder ghc "9.2"
+              && builtins.elem sys ["macos-15" "ubuntu-24.04-arm"]
+              ## GHC 9.2.1 relied on libnuma at runtime for aarch64
+              || ghc == "9.2.1" && sys == "ubuntu-24.04-arm"
+            then []
+            else [
+              "build (${ghc}, ${sys})"
+              "build (--prefer-oldest, ${ghc}, ${sys})"
+            ])
         self.lib.nonNixTestedGhcVersions)
-      self.lib.githubSystems);
+      config.services.haskell-ci.systems
+      ## Add `include`d matrix entries to the required list.
+      ++ map (
+        entry:
+          if entry.bounds == ""
+          then "build (${entry.ghc}, ${entry.os})"
+          else "build (${entry.bounds}, ${entry.ghc}, ${entry.os})"
+      )
+      config.services.haskell-ci.include);
   services.haskell-ci = {
     inherit (self.lib) defaultGhcVersion;
-    systems = self.lib.githubSystems;
     ghcVersions = self.lib.nonNixTestedGhcVersions;
     cabalPackages = {
       xdg-base-directory = "core";
       xdg-base-directory-internal = "internal";
     };
+    ## The latest Stackage LTS that we also build on GitHub for.
     latestGhcVersion = "9.10.1";
   };
 
   ## publishing
-  services.github.enable = true;
   services.github.settings.repository.topics = [];
 }

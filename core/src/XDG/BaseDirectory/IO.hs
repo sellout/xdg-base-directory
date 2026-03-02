@@ -68,12 +68,14 @@ import "base" Control.Exception (try)
 import "base" Control.Monad (join, (<=<), (=<<))
 import "base" Data.Bifunctor (first)
 import "base" Data.Bool (Bool (False), bool)
+import "base" Data.Data (Data)
 import "base" Data.Either (Either (Left, Right), either)
 import "base" Data.Eq (Eq)
 import "base" Data.Foldable (Foldable, foldr, toList)
 import "base" Data.Function (flip, ($))
 import "base" Data.Functor (Functor, fmap, (<$), (<$>))
 import "base" Data.Functor.Compose (Compose (Compose), getCompose)
+import qualified "base" Data.Kind as Kind
 import "base" Data.List.NonEmpty (NonEmpty, nonEmpty)
 import qualified "base" Data.List.NonEmpty as NonEmpty
 import "base" Data.Maybe (Maybe (Nothing), maybe)
@@ -137,7 +139,7 @@ import "this" XDG.BaseDirectory.Internal (BaseDirectory, Error, weakenEither)
 -- | The types of file that live _only_ in the user’s home directory and can be
 --   read & written arbitrarily.
 data User = Cache | State
-  deriving stock (Eq, Generic, Ord, Read, Show)
+  deriving stock (Data, Eq, Generic, Ord, Read, Show)
 
 resolveUser ::
   User -> IO (These (NonEmpty (Error Dir.PathComponent)) (BaseDirectory Dir.PathComponent))
@@ -152,7 +154,7 @@ resolveUser = \case
 --   of decreasing importance (later entries may either be ignored or contribute
 --   to the final result).
 data Aggregate = Config | Data
-  deriving stock (Eq, Generic, Ord, Read, Show)
+  deriving stock (Data, Eq, Generic, Ord, Read, Show)
 
 consAggregate' ::
   Either (Error rep) (BaseDirectory rep) ->
@@ -192,7 +194,7 @@ resolveAggregate =
     Data -> (dataHome, dataDirs)
 
 data Target = System | User
-  deriving stock (Eq, Generic, Ord, Read, Show)
+  deriving stock (Data, Eq, Generic, Ord, Read, Show)
 
 resolveTarget ::
   Target ->
@@ -248,7 +250,7 @@ tracing f x = (\() -> x) <$> f x
 --       once every 6 hours of monotonic time or the 'sticky' bit should be set
 --       on the file.
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
-data InvalidRuntimeDir rep
+data InvalidRuntimeDir (rep :: Kind.Type)
   = -- |
     --       The directory MUST be owned by the user,
     --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
@@ -295,17 +297,10 @@ data InvalidRuntimeDir rep
     --       restrictions on the file name character set should be imposed.
     --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
     NotFullyFeatured
-  deriving stock
-    ( Eq,
-      Generic,
-      Ord,
-      Read,
-      Show,
-      Foldable,
-      Functor,
-      Generic1,
-      Traversable
-    )
+  deriving stock (Data, Eq, Ord, Generic, Read, Show)
+  deriving stock (Foldable, Functor, Generic1, Traversable)
+
+type role InvalidRuntimeDir representational
 
 -- | This checks the properties that we can, to ensure that it follows them.
 --
@@ -635,15 +630,29 @@ withExecutableFile filename truncate action =
       . first ConstructionError
       =<< binDir
 
-data FileError rep
+-- |
+--
+--  __NB__: This is lacking `Ord` and `Read` instances because `IOError` is
+--          missing them.
+data FileError (rep :: Kind.Type)
   = ConstructionError (Error rep)
   | IOError IOError
-  deriving stock (Eq, Generic, Show, Foldable, Functor, Generic1, Traversable)
+  deriving stock (Eq, Generic, Show)
+  deriving stock (Foldable, Functor, Generic1, Traversable)
 
-data WriteError rep
+type role FileError representational
+
+-- |
+--
+--  __NB__: This is lacking `Ord` and `Read` instances because `IOError` is
+--          missing them.
+data WriteError (rep :: Kind.Type)
   = FileError (FileError rep)
   | CreationFailure IOError
-  deriving stock (Eq, Generic, Show, Foldable, Functor, Generic1, Traversable)
+  deriving stock (Eq, Generic, Show)
+  deriving stock (Foldable, Functor, Generic1, Traversable)
+
+type role WriteError representational
 
 -- | Why is there no `Monad` for `These`?
 joinThese :: (Semigroup a) => These a (These a b) -> These a b
@@ -656,7 +665,7 @@ joinThese = \case
 
 -- | `IOMode`, but restricted to modes that involve writing.
 data IOWriteMode = WriteMode | AppendMode | ReadWriteMode
-  deriving stock (Eq, Generic, Ord, Read, Show)
+  deriving stock (Data, Eq, Generic, Ord, Read, Show)
 
 resolveIOWriteMode :: IOWriteMode -> IOMode
 resolveIOWriteMode = \case

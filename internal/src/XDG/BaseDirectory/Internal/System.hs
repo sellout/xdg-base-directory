@@ -13,6 +13,7 @@ where
 import safe "base" Control.Category (id)
 import safe "base" Data.Bool (Bool)
 import safe qualified "base" Data.Char as Base
+import safe qualified "base" Data.Kind as Kind
 import safe "base" Data.Maybe (Maybe)
 import safe "base" Data.String (String)
 import safe qualified "base" System.Environment as F.Env
@@ -37,7 +38,7 @@ import qualified "filepath" System.OsPath as O.Path
 
 -- | This wraps the underlying operations we use, so we can parameterize over
 --   string types.
-class Rep a where
+class Rep (a :: Kind.Type) where
   type Char a
   createDirectoryIfMissing :: Bool -> a -> IO ()
   doesDirectoryExist :: a -> IO Bool

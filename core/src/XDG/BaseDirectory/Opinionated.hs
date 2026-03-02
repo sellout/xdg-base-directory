@@ -58,6 +58,7 @@ import "base" Control.Category ((.))
 import "base" Data.Bool (Bool (False))
 import "base" Data.Either (Either)
 import "base" Data.Function (flip)
+import qualified "base" Data.Kind as Kind
 import "base" Data.List.NonEmpty (NonEmpty)
 import "base" Data.Maybe (Maybe)
 import "base" System.IO (Handle, IO)
@@ -143,7 +144,7 @@ import "this" XDG.BaseDirectory.Internal (BaseDirectory, Error)
 --   while they’re open.
 --
 -- >>> let myprogram = subdirOperations "myprogram" $ pure [posix|/run/whatever/|]
-data Operations rep = Operations
+data Operations (rep :: Kind.Type) = Operations
   { -- |
     --
     -- >>> withUserFile myprogram State [posix|archive.db|] ReadWriteMode pure
@@ -227,6 +228,8 @@ data Operations rep = Operations
       (Handle -> IO a) ->
       IO (These (NonEmpty (Either (InvalidRuntimeDir rep) (FileError rep))) a)
   }
+
+type role Operations nominal
 
 -- | This is the recommended interface with this library. You can call this
 --   function once and then use the members throughout your program.

@@ -11,6 +11,7 @@ import "base" Data.Eq (Eq)
 import "base" Data.Foldable (Foldable)
 import "base" Data.Function (($))
 import "base" Data.Functor (Functor)
+import qualified "base" Data.Kind as Kind
 import "base" Data.Ord (Ord)
 import "base" Data.Semigroup (Semigroup, (<>))
 import "base" Data.Traversable (Traversable)
@@ -20,19 +21,13 @@ import "base" Text.Read (Read)
 import "base" Text.Show (Show)
 import "comonad" Control.Comonad (Comonad, duplicate, extract)
 
-data Annotated a b = NotBut b | Noted a b
-  deriving stock
-    ( Eq,
-      Generic,
-      Ord,
-      Read,
-      Show,
-      Foldable,
-      Functor,
-      Generic1,
-      Traversable
-    )
+type role Annotated representational representational
 
+data Annotated (a :: Kind.Type) (b :: Kind.Type) = NotBut b | Noted a b
+  deriving stock (Eq, Generic, Ord, Read, Show)
+  deriving stock (Foldable, Functor, Generic1, Traversable)
+
+-- | A more general version of `<>` for `Annotated`.
 combineAnnotated ::
   (a -> a -> a) ->
   (b -> c -> d) ->

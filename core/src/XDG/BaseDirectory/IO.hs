@@ -69,7 +69,7 @@ import "base" Control.Monad.IO.Class (MonadIO, liftIO)
 import "base" Data.Bifunctor (first)
 import "base" Data.Bool (Bool (False), bool)
 import "base" Data.Data (Data)
-import "base" Data.Either (Either (Left, Right), either)
+import "base" Data.Either (Either (Left), either)
 import "base" Data.Eq (Eq)
 import "base" Data.Foldable (Foldable, foldr, toList)
 import "base" Data.Function (flip, ($))
@@ -101,7 +101,7 @@ import "transformers" Control.Monad.Trans.Class (lift)
 import "transformers" Control.Monad.Trans.Except (ExceptT (ExceptT), runExceptT)
 import qualified "xdg-base-directory-internal" Data.Path.Patch as Patch
 import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
-import "this" Data.Annotated (Annotated (NotBut, Noted))
+import "this" Data.Annotated (Annotated (NotBut, Noted), annotated)
 import "this" XDG.BaseDirectory
   ( binDir,
     cacheHome,
@@ -163,29 +163,26 @@ consAggregate' ::
   Annotated (NonEmpty (Error rep)) (NonEmpty (BaseDirectory rep)) ->
   Annotated (NonEmpty (Error rep)) (NonEmpty (BaseDirectory rep))
 consAggregate' =
-  curry \case
-    (Left e, NotBut as) -> Noted (pure e) as
-    (Left e, Noted es as) -> Noted (NonEmpty.cons e es) as
-    (Right a, NotBut as) -> NotBut $ NonEmpty.cons a as
-    (Right a, Noted es as) -> Noted es $ NonEmpty.cons a as
+  either
+    (\e -> annotated (Noted $ pure e) $ Noted . NonEmpty.cons e)
+    ( \a -> annotated (NotBut . NonEmpty.cons a) $ \es ->
+        Noted es . NonEmpty.cons a
+    )
 
 consAggregate ::
   These (NonEmpty (Error rep)) (BaseDirectory rep) ->
   Annotated (NonEmpty (Error rep)) (NonEmpty (BaseDirectory rep)) ->
   Annotated (NonEmpty (Error rep)) (NonEmpty (BaseDirectory rep))
-consAggregate =
-  curry \case
-    (This es, NotBut as) -> Noted es as
-    (This es, Noted es' as) -> Noted (es <> es') as
-    (That a, NotBut as) -> NotBut $ NonEmpty.cons a as
-    (That a, Noted es as) -> Noted es $ NonEmpty.cons a as
-    (These es a, NotBut as) -> Noted es $ NonEmpty.cons a as
-    (These es a, Noted es' as) -> Noted (es <> es') $ NonEmpty.cons a as
+consAggregate = \case
+  This es -> annotated (Noted es) (Noted . (es <>))
+  That a ->
+    annotated (NotBut . NonEmpty.cons a) $ \es -> Noted es . NonEmpty.cons a
+  These es a ->
+    annotated (Noted es . NonEmpty.cons a) $ \es' ->
+      Noted (es <> es') . NonEmpty.cons a
 
 weakenAnnotated :: Annotated a b -> These a b
-weakenAnnotated = \case
-  NotBut b -> That b
-  Noted a b -> These a b
+weakenAnnotated = annotated That These
 
 resolveAggregate ::
   Aggregate ->
@@ -201,21 +198,15 @@ data Target = System | User
 resolveTarget ::
   Target ->
   Aggregate ->
-  IO (These (NonEmpty (Error Dir.PathComponent)) (BaseDirectory Dir.PathComponent))
+  IO
+    ( These
+        (NonEmpty (Error Dir.PathComponent))
+        (BaseDirectory Dir.PathComponent)
+    )
 resolveTarget =
   curry \case
-    (System, Config) ->
-      ( \case
-          NotBut b -> pure b
-          Noted a b -> These (pure a) b
-      )
-        <$> sysconfdir
-    (System, Data) ->
-      ( \case
-          NotBut b -> pure b
-          Noted a b -> These (pure a) b
-      )
-        <$> datadir
+    (System, Config) -> annotated pure (These . pure) <$> sysconfdir
+    (System, Data) -> annotated pure (These . pure) <$> datadir
     (User, Config) -> configHome
     (User, Data) -> dataHome
 
@@ -502,7 +493,7 @@ withRuntimeFile' ::
   (Error Dir.PathComponent -> m ()) ->
   (Handle -> m a) ->
   m' (These (NonEmpty (Either (InvalidRuntimeDir Dir.PathComponent) w)) a)
-withRuntimeFile' liftM wf liftErr _preserve filename fallback warning action =
+withRuntimeFile' lift' wf liftErr _preserve filename fallback warning action =
   ( fmap joinThese
       . traverse
         ( fmap (weakenEither . first (pure . pure . liftErr . IOError))
@@ -515,7 +506,7 @@ withRuntimeFile' liftM wf liftErr _preserve filename fallback warning action =
               --   preserve
         )
       . joinThese
-      <=< liftM
+      <=< lift'
         . ( traverse
               -- TODO: This should warn if we’re only reading the file (or is that not
               --       good enough?)
@@ -534,7 +525,7 @@ withRuntimeFile' liftM wf liftErr _preserve filename fallback warning action =
                 (pure . pure)
           )
   )
-    <=< liftM
+    <=< lift'
     $ liftIO runtimeDir
 
 -- |
@@ -596,7 +587,7 @@ withRuntimeFile ::
         a
     )
 withRuntimeFile filename mode preserve =
-  withRuntimeFile' lift (flip withFile mode) FileError preserve filename
+  withRuntimeFile' lift (`withFile` mode) FileError preserve filename
 
 -- |
 --

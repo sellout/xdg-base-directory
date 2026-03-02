@@ -22,14 +22,21 @@ import "base" Data.List.NonEmpty (NonEmpty ((:|)))
 import "base" System.IO (IO)
 import "pathway" Data.Path (Path, Relativity (Abs, Rel), Type (Dir), (</>))
 import "pathway" Data.Path.TH (posix)
+import qualified "pathway-system" Filesystem.Path as Dir
 import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
 import qualified "this" XDG.BaseDirectory.Default.Relative as Relative
 import "this" XDG.BaseDirectory.Internal (Error, getHomeDirectory)
 
-pinHome :: (System.Rep rep) => Path ('Rel 'False) typ rep -> IO (Either (Error rep) (Path 'Abs typ rep))
+pinHome ::
+  Path ('Rel 'False) typ Dir.PathComponent ->
+  IO (Either (Error Dir.PathComponent) (Path 'Abs typ Dir.PathComponent))
 pinHome rel = fmap (</> rel) <$> getHomeDirectory
 
-dataHome, configHome, stateHome, cacheHome :: (System.Rep rep) => IO (Either (Error rep) (Path 'Abs 'Dir rep))
+dataHome,
+  configHome,
+  stateHome,
+  cacheHome ::
+    IO (Either (Error Dir.PathComponent) (Path 'Abs 'Dir Dir.PathComponent))
 
 -- |
 --

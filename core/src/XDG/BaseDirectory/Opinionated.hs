@@ -60,12 +60,11 @@ import "base" Data.Either (Either)
 import "base" Data.Function (flip)
 import "base" Data.List.NonEmpty (NonEmpty)
 import "base" Data.Maybe (Maybe)
-import "base" Data.Ord (Ord)
 import "base" System.IO (Handle, IO)
 import "pathway" Data.Path (Path, Relativity (Rel), Type (File), (</>))
 import qualified "pathway" Data.Path.Directory as Directory
+import qualified "pathway-system" Filesystem.Path as Dir
 import "these" Data.These (These)
-import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
 import "this" XDG.BaseDirectory.IO
   ( Aggregate (Config, Data),
     FileError (ConstructionError, IOError),
@@ -234,10 +233,8 @@ data Operations rep = Operations
 --
 -- >>> myprogram = subdirOperations "myprogram" $ pure [posix|/run/whatever/|]
 subdirOperations ::
-  forall rep.
-  (System.Rep rep, Ord rep) =>
   -- | The program directory component.
-  rep ->
+  Dir.PathComponent ->
   -- | A fallback directory to use for `withRuntimeFile` and `withRuntimeFileRO`
   --   if `$XDG_RUNTIME_DIR` isn’t set. If this is `Nothing`, then
   --   `$XDG_RUNTIME_DIR` being unset results in an error instead of a warning.
@@ -246,13 +243,16 @@ subdirOperations ::
   --       replacement directory with similar capabilities and print a warning
   --       message.
   --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
-  Maybe (BaseDirectory rep) ->
-  Operations rep
+  --
+  --  __NB__: This directory should already be application-specific. The
+  --          provided directory component won’t be appended to it.
+  Maybe (BaseDirectory Dir.PathComponent) ->
+  Operations Dir.PathComponent
 subdirOperations subdir runtimeFallback =
   let injectSubdir ::
         forall k.
-        (Path ('Rel 'False) 'File rep -> k) ->
-        Path ('Rel 'False) 'File rep ->
+        (Path ('Rel 'False) 'File Dir.PathComponent -> k) ->
+        Path ('Rel 'False) 'File Dir.PathComponent ->
         k
       injectSubdir fn = fn . (Directory.descendTo Directory.current subdir </>)
    in Operations

@@ -164,7 +164,9 @@ library
   build-depends:
     comonad,
     pathway,
+    pathway-system,
     these,
+    transformers,
     xdg-base-directory-internal,
   exposed-modules:
     Data.Annotated

@@ -43,6 +43,7 @@ module XDG.BaseDirectory.Opinionated
     Target (..),
     FileError (..),
     WriteError (..),
+    Operations,
     subdirOperations,
     withUserFile,
     withUserFileRO,

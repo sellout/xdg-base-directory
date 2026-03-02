@@ -34,6 +34,7 @@ import "base" Data.List.NonEmpty (NonEmpty ((:|)))
 import "base" System.IO (IO)
 import "pathway" Data.Path ((</>))
 import "pathway" Data.Path.TH (posix)
+import qualified "pathway-system" Filesystem.Path as Dir
 import "these" Data.These (These (These, This), these)
 import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
 import "this" Data.Annotated (Annotated (NotBut, Noted))
@@ -74,7 +75,7 @@ dataHome,
   configHome,
   stateHome,
   cacheHome ::
-    (System.Rep rep) => IO (These (NonEmpty (Error rep)) (BaseDirectory rep))
+    IO (These (NonEmpty (Error Dir.PathComponent)) (BaseDirectory Dir.PathComponent))
 dataHome = getOrDefault <$> Default.dataHome <*> Custom.dataHome
 configHome = getOrDefault <$> Default.configHome <*> Custom.configHome
 
@@ -169,8 +170,8 @@ runtimeDir = Custom.runtimeDir
 --       architecture-specific if compiled binaries are placed in it should be
 --       kept in mind.
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
-binDir :: (System.Rep rep) => IO (Either (Error rep) (BaseDirectory rep))
-binDir = fmap (</> fmap System.fromStringLiteral [posix|.local/bin/|]) <$> getHomeDirectory
+binDir :: IO (Either (Error Dir.PathComponent) (BaseDirectory Dir.PathComponent))
+binDir = fmap (</> [posix|.local/bin/|]) <$> getHomeDirectory
 
 datadir, sysconfdir :: (System.Rep rep) => IO (Annotated (Error rep) (BaseDirectory rep))
 

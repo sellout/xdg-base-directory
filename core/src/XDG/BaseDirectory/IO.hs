@@ -92,7 +92,9 @@ import "base" Text.Show (Show)
 import "pathway" Data.Path (Path, Relativity (Rel), Type (File), (</>))
 import qualified "pathway" Data.Path.Directory as Directory
 import qualified "pathway" Data.Path.File as File
+import qualified "pathway-system" Filesystem.Path as Dir
 import "these" Data.These (These (That, These, This))
+import "transformers" Control.Monad.Trans.Except (runExceptT)
 import qualified "xdg-base-directory-internal" Data.Path.Patch as Patch
 import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
 import "this" Data.Annotated (Annotated (NotBut, Noted))
@@ -138,7 +140,7 @@ data User = Cache | State
   deriving stock (Eq, Generic, Ord, Read, Show)
 
 resolveUser ::
-  (System.Rep rep) => User -> IO (These (NonEmpty (Error rep)) (BaseDirectory rep))
+  User -> IO (These (NonEmpty (Error Dir.PathComponent)) (BaseDirectory Dir.PathComponent))
 resolveUser = \case
   Cache -> cacheHome
   State -> stateHome
@@ -182,9 +184,8 @@ weakenAnnotated = \case
   Noted a b -> These a b
 
 resolveAggregate ::
-  (System.Rep rep) =>
   Aggregate ->
-  IO (Annotated (NonEmpty (Error rep)) (NonEmpty (BaseDirectory rep)))
+  IO (Annotated (NonEmpty (Error Dir.PathComponent)) (NonEmpty (BaseDirectory Dir.PathComponent)))
 resolveAggregate =
   uncurry (liftA2 consAggregate) . \case
     Config -> (configHome, configDirs)
@@ -194,10 +195,9 @@ data Target = System | User
   deriving stock (Eq, Generic, Ord, Read, Show)
 
 resolveTarget ::
-  (System.Rep rep) =>
   Target ->
   Aggregate ->
-  IO (These (NonEmpty (Error rep)) (BaseDirectory rep))
+  IO (These (NonEmpty (Error Dir.PathComponent)) (BaseDirectory Dir.PathComponent))
 resolveTarget =
   curry \case
     (System, Config) ->
@@ -315,11 +315,10 @@ data InvalidRuntimeDir rep
 -- * must be on local file system
 -- * must be “fully-featured”
 verifyRuntimeDir ::
-  (System.Rep rep, Ord rep) =>
-  BaseDirectory rep ->
-  IO (Either (InvalidRuntimeDir rep) ())
+  BaseDirectory Dir.PathComponent ->
+  IO (Either (InvalidRuntimeDir Dir.PathComponent) ())
 verifyRuntimeDir dir =
-  bool (Left InvalidLifetime) (pure ()) <$> Patch.doesDirectoryExist dir
+  bool (Left InvalidLifetime) (pure ()) <$> Dir.doesExist dir
 
 -- |
 --
@@ -333,15 +332,15 @@ verifyRuntimeDir dir =
 --
 --       —[§4](https://specifications.freedesktop.org/basedir-spec/latest/#referencing)
 withFile ::
-  (System.Rep rep, Ord rep) =>
-  Path ('Rel 'False) 'File rep ->
+  Path ('Rel 'False) 'File Dir.PathComponent ->
   IOWriteMode ->
   (Handle -> IO a) ->
-  BaseDirectory rep ->
+  BaseDirectory Dir.PathComponent ->
   IO (Either IOError a)
 withFile filename mode action base = do
   let filepath = base </> filename
-  Patch.createDirectoryWithParentsIfMissing $ File.directory filepath
+  -- FIXME: Don’t discard the error here
+  _ <- runExceptT . Dir.createDirectoryWithParentsIfMissing $ File.directory filepath
   try $ Patch.withFile filepath (resolveIOWriteMode mode) action
 
 withFileRO ::
@@ -355,15 +354,14 @@ withFileRO filename =
 
 -- |
 --
--- >>> withUserFile @FilePath State [posix|myprogram/archive.db|] ReadWriteMode pure
+-- >>> withUserFile State [posix|myprogram/archive.db|] ReadWriteMode pure
 -- These (FileError (ConstructionError (Var (...Var "XDG_STATE_HOME"...)) :| []) {handle: .../home/example-user/.local/state/myprogram/archive.db}
 withUserFile ::
-  (System.Rep rep, Ord rep) =>
   User ->
-  Path ('Rel 'False) 'File rep ->
+  Path ('Rel 'False) 'File Dir.PathComponent ->
   IOWriteMode ->
   (Handle -> IO a) ->
-  IO (These (NonEmpty (WriteError rep)) a)
+  IO (These (NonEmpty (WriteError Dir.PathComponent)) a)
 withUserFile user filename mode action =
   fmap joinThese
     . traverse
@@ -375,14 +373,13 @@ withUserFile user filename mode action =
 
 -- |
 --
--- >>> withUserFileRO @FilePath State [posix|myprogram/archive.db|] pure
+-- >>> withUserFileRO State [posix|myprogram/archive.db|] pure
 -- This (ConstructionError (Var (...Var "XDG_STATE_HOME"...) :| [IOError .../home/example-user/.local/state/myprogram/archive.db: withFile: does not exist (No such file or directory)])
 withUserFileRO ::
-  (System.Rep rep, Ord rep) =>
   User ->
-  Path ('Rel 'False) 'File rep ->
+  Path ('Rel 'False) 'File Dir.PathComponent ->
   (Handle -> IO a) ->
-  IO (These (NonEmpty (FileError rep)) a)
+  IO (These (NonEmpty (FileError Dir.PathComponent)) a)
 withUserFileRO user filename action =
   fmap joinThese
     . traverse
@@ -405,22 +402,21 @@ withUserFileRO user filename action =
 --        rules for merging the information from the different files.
 --        —[§4](https://specifications.freedesktop.org/basedir-spec/0.8/#referencing)
 --
--- >>> withAggregateFiles @FilePath Config [posix|myprogram/settings.dhall|] pure
+-- >>> withAggregateFiles Config [posix|myprogram/settings.dhall|] pure
 -- This [ConstructionError (Var (...Var "XDG_CONFIG_HOME"...),ConstructionError (Var (MissingVar "XDG_CONFIG_DIRS" Nothing)),IOError .../home/example-user/.config/myprogram/settings.dhall: withFile: does not exist (No such file or directory),IOError /etc/xdg/myprogram/settings.dhall: withFile: does not exist (No such file or directory)]
 --
--- >>> withAggregateFiles @FilePath Data [posix|myprogram/resources/splash.png|] pure
+-- >>> withAggregateFiles Data [posix|myprogram/resources/splash.png|] pure
 -- This [ConstructionError (Var (...Var "XDG_DATA_HOME"...),ConstructionError (Var (...Var "XDG_DATA_DIRS"...),IOError .../home/example-user/.local/share/myprogram/resources/splash.png: withFile: does not exist (No such file or directory),IOError /usr/local/share/myprogram/resources/splash.png: withFile: does not exist (No such file or directory),IOError /usr/share/myprogram/resources/splash.png: withFile: does not exist (No such file or directory)]
 withAggregateFiles ::
-  (System.Rep rep, Ord rep) =>
   -- | What kinds of files we are reading.
   Aggregate ->
   -- | Path to the desired file, relative to the project prefixes.
-  Path ('Rel 'False) 'File rep ->
+  Path ('Rel 'False) 'File Dir.PathComponent ->
   -- | An action that is given the list of handles we are reading from. The
   --   handles are in order of decreasing importance, so the ones after the
   --   first can be dropped, or otherwise have earlier ones layered on them.
   (NonEmpty Handle -> IO a) ->
-  IO (These [FileError rep] a)
+  IO (These [FileError Dir.PathComponent] a)
 withAggregateFiles aggregate filename action =
   fmap joinThese
     . traverse
@@ -432,16 +428,15 @@ withAggregateFiles aggregate filename action =
 -- | This can only write to the targeted file. To read, use `withAggregateFiles`
 --   to access all of the related files.
 --
--- >>> withTargetFile @FilePath User Config [posix|myprogram/settings.dhall|] False pure
+-- >>> withTargetFile User Config [posix|myprogram/settings.dhall|] False pure
 -- These (FileError (ConstructionError (Var (...Var "XDG_CONFIG_HOME"...)) :| []) {handle: .../home/example-user/.config/myprogram/settings.dhall}
 withTargetFile ::
-  (System.Rep rep, Ord rep) =>
   Target ->
   Aggregate ->
-  Path ('Rel 'False) 'File rep ->
+  Path ('Rel 'False) 'File Dir.PathComponent ->
   Bool ->
   (Handle -> IO a) ->
-  IO (These (NonEmpty (WriteError rep)) a)
+  IO (These (NonEmpty (WriteError Dir.PathComponent)) a)
 withTargetFile target aggregate filename truncate action =
   fmap joinThese
     . traverse
@@ -458,16 +453,15 @@ withTargetFile target aggregate filename truncate action =
 --
 -- * toggle sticky bit when we open/close
 withRuntimeFile' ::
-  (System.Rep rep, Ord rep) =>
-  ( Path ('Rel 'False) 'File rep ->
+  ( Path ('Rel 'False) 'File Dir.PathComponent ->
     (Handle -> IO a) ->
-    BaseDirectory rep ->
+    BaseDirectory Dir.PathComponent ->
     IO (Either IOError a)
   ) ->
-  (FileError rep -> w) ->
+  (FileError Dir.PathComponent -> w) ->
   -- | This function sets the sticky bit on any created file while it’s
   --   operating. If this is `True`, it will leave the sticky bit set to avoid
-  --   cleanup. If it’s `False`, it will unset the sticky bit eveni if the file
+  --   cleanup. If it’s `False`, it will unset the sticky bit even if the file
   --   previously existed with the sticky bit on, and if it’s `Nothing`, it will
   --   restore any previous sticky bit value (but default to `False` for newly
   --   created files).
@@ -475,7 +469,7 @@ withRuntimeFile' ::
   --  __TODO__: Could also set a timer to ensure the access timestamp is updated
   --            periodically.
   Maybe Bool ->
-  Path ('Rel 'False) 'File rep ->
+  Path ('Rel 'False) 'File Dir.PathComponent ->
   -- | A fallback directory to use if `$XDG_RUNTIME_DIR` isn’t set. If this is
   --   `Nothing`, then `$XDG_RUNTIME_DIR` being unset results in an error
   --   instead of a warning.
@@ -484,7 +478,7 @@ withRuntimeFile' ::
   --       replacement directory with similar capabilities and print a warning
   --       message.
   --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
-  Maybe (BaseDirectory rep) ->
+  Maybe (BaseDirectory Dir.PathComponent) ->
   -- | Produce a warning to be presented to the user when `XDG_RUNTIME_DIR`
   --   isn’t set.
   --
@@ -492,9 +486,9 @@ withRuntimeFile' ::
   --       replacement directory with similar capabilities and print a warning
   --       message.
   --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
-  (Error rep -> IO ()) ->
+  (Error Dir.PathComponent -> IO ()) ->
   (Handle -> IO a) ->
-  IO (These (NonEmpty (Either (InvalidRuntimeDir rep) w)) a)
+  IO (These (NonEmpty (Either (InvalidRuntimeDir Dir.PathComponent) w)) a)
 withRuntimeFile' wf liftErr _preserve filename fallback warning action =
   ( fmap joinThese
       . traverse
@@ -563,31 +557,29 @@ withRuntimeFile' wf liftErr _preserve filename fallback warning action =
 --       to disk.
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
 --
--- >>> withRuntimeFile @FilePath [posix|myprogram/super-secret.age|] ReadWriteMode Nothing (pure [posix|/run/whatever/|]) (const $ pure ()) pure
+-- >>> withRuntimeFile [posix|myprogram/super-secret.age|] ReadWriteMode Nothing (pure [posix|/run/whatever/|]) (const $ pure ()) pure
 -- This (Right (FileError (ConstructionError (Var (...Var "XDG_RUNTIME_DIR"...))) :| [Left InvalidLifetime])
 withRuntimeFile ::
-  (System.Rep rep, Ord rep) =>
-  Path ('Rel 'False) 'File rep ->
+  Path ('Rel 'False) 'File Dir.PathComponent ->
   IOWriteMode ->
   Maybe Bool ->
-  Maybe (BaseDirectory rep) ->
-  (Error rep -> IO ()) ->
+  Maybe (BaseDirectory Dir.PathComponent) ->
+  (Error Dir.PathComponent -> IO ()) ->
   (Handle -> IO a) ->
-  IO (These (NonEmpty (Either (InvalidRuntimeDir rep) (WriteError rep))) a)
+  IO (These (NonEmpty (Either (InvalidRuntimeDir Dir.PathComponent) (WriteError Dir.PathComponent))) a)
 withRuntimeFile filename mode preserve =
   withRuntimeFile' (flip withFile mode) FileError preserve filename
 
 -- |
 --
--- >>> withRuntimeFileRO @FilePath [posix|myprogram/super-secret.age|] (pure [posix|/run/whatever/|]) (const $ pure ()) pure
+-- >>> withRuntimeFileRO [posix|myprogram/super-secret.age|] (pure [posix|/run/whatever/|]) (const $ pure ()) pure
 -- This (Right (ConstructionError (Var (...Var "XDG_RUNTIME_DIR"...)) :| [Left InvalidLifetime])
 withRuntimeFileRO ::
-  (System.Rep rep, Ord rep) =>
-  Path ('Rel 'False) 'File rep ->
-  Maybe (BaseDirectory rep) ->
-  (Error rep -> IO ()) ->
+  Path ('Rel 'False) 'File Dir.PathComponent ->
+  Maybe (BaseDirectory Dir.PathComponent) ->
+  (Error Dir.PathComponent -> IO ()) ->
   (Handle -> IO a) ->
-  IO (These (NonEmpty (Either (InvalidRuntimeDir rep) (FileError rep))) a)
+  IO (These (NonEmpty (Either (InvalidRuntimeDir Dir.PathComponent) (FileError Dir.PathComponent))) a)
 withRuntimeFileRO = withRuntimeFile' withFileRO id Nothing
 
 -- | Apply an action to the same file in each directory.
@@ -621,15 +613,14 @@ foldDirs filename action dirs =
 -- >>> withExecutableFile "some-script.sh" True pure
 -- NotBut (Right {handle: .../home/example-user/.local/bin/some-script.sh})
 withExecutableFile ::
-  (System.Rep rep, Ord rep) =>
   -- | The name of the executable to write.
-  rep ->
+  Dir.PathComponent ->
   -- | Whether the file should be truncated (`True` → `IO.WriteMode`,
   --   `False` → `IO.AppendMode`).
   Bool ->
   (Handle -> IO a) ->
   -- | Returns @`Noted` ()@ if @$HOME/.local/bin/@ isn’t on @PATH@.
-  IO (Annotated () (Either (FileError rep) a))
+  IO (Annotated () (Either (FileError Dir.PathComponent) a))
 withExecutableFile filename truncate action =
   -- TODO: Ensure the file is actually executable
   -- TODO: Warn if `binDir` isn’t on Path

@@ -1,7 +1,7 @@
 source-repository-package
   type: git
   location: https://github.com/sellout/pathway.git
-  tag: 20209a7a4d7448a1a3033378d5018c2abd15fc37
+  branch: system-directories
   subdir:
     internal
     pathway

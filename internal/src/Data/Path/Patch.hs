@@ -3,9 +3,6 @@
 module Data.Path.Patch
   ( AnchoredType (..),
     anchorType,
-    createDirectoryWithParentsIfMissing,
-    doesDirectoryExist,
-    getHomeDirectory,
     parseDirectory,
     parseStrict,
     serialize,
@@ -19,7 +16,6 @@ import "base" Control.Category ((.))
 import "base" Data.Bool (Bool (False, True))
 import "base" Data.Foldable (foldMap, foldl, toList)
 import "base" Data.Function (flip, ($))
-import "base" Data.Functor ((<$>))
 import "base" Data.List (reverse)
 import "base" Data.Monoid (mempty)
 import "base" Data.Ord (Ord)
@@ -27,31 +23,31 @@ import "base" Data.Proxy (Proxy (Proxy))
 import "base" Data.Semigroup ((<>))
 import "base" Numeric.Natural (Natural)
 import "base" System.IO (Handle, IO, IOMode)
+import "pathway" Data.Path (Type (Dir, File))
 import qualified "pathway" Data.Path as Path
 import qualified "pathway" Data.Path.Directory as Directory
 import "pathway" Data.Path.Format (Format (Format))
 import qualified "pathway" Data.Path.Format as Format
+import qualified "pathway" Data.Path.Relativity as Rel
+import qualified "pathway" Data.Path.Type as Type
 import "pathway-internal" Data.Path.Internal
   ( List (List),
     Path (Path),
-    Relativity (Any),
-    Type (Dir, File, Pathic),
     directories,
     filename,
     parents,
   )
-import qualified "pathway-internal" Data.Path.Internal as Internal
 import "strict" Data.Strict.Maybe (maybe)
 import "yaya" Yaya.Fold (cata, cata2, embed)
 import "yaya" Yaya.Fold.Common (takeAvailable)
 import qualified "this" XDG.BaseDirectory.Internal.System as System
 
 data AnchoredType typ rep
-  = Abs (Path 'Internal.Abs typ rep)
-  | Rel (Path ('Internal.Rel 'False) typ rep)
-  | Reparented (Path ('Internal.Rel 'True) typ rep)
+  = Abs (Path 'Rel.Abs typ rep)
+  | Rel (Path ('Rel.Rel 'False) typ rep)
+  | Reparented (Path ('Rel.Rel 'True) typ rep)
 
-anchorType :: Path 'Any typ rep -> AnchoredType typ rep
+anchorType :: Path 'Rel.Any typ rep -> AnchoredType typ rep
 anchorType path =
   maybe
     ( Abs
@@ -84,7 +80,7 @@ anchorType path =
 --  __TODO__: Move this to pathway-system as an alternative to @MP.parse directory Format.local@.
 --
 --  __FIXME__: This currently does nothing about escape chars.
-parseStrict :: (System.Rep rep) => rep -> Path 'Any 'Pathic rep
+parseStrict :: (System.Rep rep) => rep -> Path 'Rel.Any 'Type.Any rep
 parseStrict path =
   let (dir, file) = System.splitFileName path
    in ( if System.isValid file
@@ -98,7 +94,7 @@ parseStrict path =
 --  __TODO__: Move this to pathway-system as an alternative to @MP.parse directory Format.local@.
 --
 --  __FIXME__: This currently does nothing about escape chars.
-parseDirectory :: (System.Rep rep) => rep -> Path 'Any 'Dir rep
+parseDirectory :: (System.Rep rep) => rep -> Path 'Rel.Any 'Dir rep
 parseDirectory path =
   let (drive, dir) = System.splitDrive path
    in Directory.descendThrough
@@ -112,12 +108,6 @@ parseDirectory path =
         --     problem.
         . cata2 (embed . takeAvailable) (100 :: Natural)
         $ System.splitDirectories dir
-
--- |
---
---  __FIXME__: This should be coming from a Pathway lib.
-getHomeDirectory :: (System.Rep rep) => IO (Path 'Any 'Dir rep)
-getHomeDirectory = parseDirectory <$> System.getHomeDirectory
 
 serializeAny :: (System.Rep a) => Format a -> Path.AnyPath a -> a
 serializeAny format path =
@@ -152,18 +142,8 @@ localFormat =
 withFile ::
   forall rep a.
   (System.Rep rep, Ord rep) =>
-  Path 'Internal.Abs 'File rep ->
+  Path 'Rel.Abs 'File rep ->
   IOMode ->
   (Handle -> IO a) ->
   IO a
 withFile = System.withFile . serialize localFormat
-
-createDirectoryWithParentsIfMissing ::
-  (System.Rep rep, Ord rep) => Path 'Path.Abs 'Dir rep -> IO ()
-createDirectoryWithParentsIfMissing =
-  System.createDirectoryIfMissing True . serialize localFormat
-
-doesDirectoryExist ::
-  (System.Rep rep, Ord rep) => Path 'Path.Abs 'Dir rep -> IO Bool
-doesDirectoryExist =
-  System.doesDirectoryExist . serialize localFormat

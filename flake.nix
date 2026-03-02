@@ -2,6 +2,7 @@
   description = "A faithful implementation of the XDG Base Directory spec";
 
   nixConfig = {
+    allow-import-from-derivation = true;
     ## https://github.com/NixOS/rfcs/blob/master/rfcs/0045-deprecate-url-syntax.md
     extra-experimental-features = ["no-url-literals"];
     extra-substituters = ["https://cache.garnix.io"];
@@ -234,9 +235,8 @@
 
     pathway = {
       inputs.flaky.follows = "flaky";
-      url =
-        ## NB: The revision here needs to match the one in ./cabal.project
-        "github:sellout/pathway/344f089b2b6fa8d4f06c1a8b3f37664ef69af089";
+      ## NB: The revision here needs to match the one in ./cabal.project
+      url = "github:sellout/pathway/system-directories";
     };
   };
 }

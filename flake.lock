@@ -161,11 +161,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1751865916,
-        "narHash": "sha256-8KeAkfkwYv7jECaddBLtjtjicmkhG2RISrmv4OgEZrg=",
+        "lastModified": 1769501040,
+        "narHash": "sha256-Jx6o4Q8zK2PZrW6dpA6JoG24J/C4WNYcDxlz/i0Ya2U=",
         "owner": "sellout",
         "repo": "flaky-haskell",
-        "rev": "e3627cddd71c1e3bf3e7e690f5fca6fab057a64f",
+        "rev": "010ee57ddd75bd6c4464c61045a3c2fec5b7d972",
         "type": "github"
       },
       "original": {
@@ -325,11 +325,6 @@
     },
     "pathway": {
       "inputs": {
-        "bash-strict-mode": [
-          "pathway",
-          "flaky",
-          "bash-strict-mode"
-        ],
         "flake-utils": [
           "pathway",
           "flaky",
@@ -351,17 +346,17 @@
         ]
       },
       "locked": {
-        "lastModified": 1753371569,
-        "narHash": "sha256-UD/gd32edeqLrY11Hawm1zCC/AcW71T8B9ut+dcJdNM=",
+        "lastModified": 1772440610,
+        "narHash": "sha256-YK8PSFHNnpxSHt+AFxoWtrSfsc5cJPnq2YBq7W+WkWs=",
         "owner": "sellout",
         "repo": "pathway",
-        "rev": "344f089b2b6fa8d4f06c1a8b3f37664ef69af089",
+        "rev": "28145d63868e332ed194ca4f9751072b9749c284",
         "type": "github"
       },
       "original": {
         "owner": "sellout",
+        "ref": "system-directories",
         "repo": "pathway",
-        "rev": "344f089b2b6fa8d4f06c1a8b3f37664ef69af089",
         "type": "github"
       }
     },

@@ -2,14 +2,17 @@
 
 module Data.Annotated
   ( Annotated (..),
+    annotated,
+    combineAnnotated,
   )
 where
 
 import "base" Control.Applicative (Applicative, liftA2, pure)
+import "base" Control.Category (id, (.))
 import "base" Control.Monad (Monad, (>>=))
 import "base" Data.Eq (Eq)
 import "base" Data.Foldable (Foldable)
-import "base" Data.Function (($))
+import "base" Data.Function (const, ($))
 import "base" Data.Functor (Functor)
 import qualified "base" Data.Kind as Kind
 import "base" Data.Ord (Ord)
@@ -21,11 +24,20 @@ import "base" Text.Read (Read)
 import "base" Text.Show (Show)
 import "comonad" Control.Comonad (Comonad, duplicate, extract)
 
-type role Annotated representational representational
-
+-- | This is isomorphic to `(Maybe a, b)` and is like a reversed `AndMaybe`,
+--   which gives it different semantics. It is useful when a value may be
+--   produced with warnings, with `NotBut` representing a clean result and
+--   `Noted` being annotated with warnings.
 data Annotated (a :: Kind.Type) (b :: Kind.Type) = NotBut b | Noted a b
   deriving stock (Eq, Generic, Ord, Read, Show)
   deriving stock (Foldable, Functor, Generic1, Traversable)
+
+type role Annotated representational representational
+
+annotated :: (b -> c) -> (a -> b -> c) -> Annotated a b -> c
+annotated f g = \case
+  NotBut b -> f b
+  Noted a b -> g a b
 
 -- | A more general version of `<>` for `Annotated`.
 combineAnnotated ::
@@ -51,16 +63,8 @@ instance (Semigroup a, Semigroup b) => Semigroup (Annotated a b) where
   (<>) = liftA2 (<>)
 
 instance (Semigroup a) => Monad (Annotated a) where
-  ann >>= f = case ann of
-    NotBut b -> f b
-    Noted a b -> case f b of
-      NotBut b' -> Noted a b'
-      Noted a' b' -> Noted (a <> a') b'
+  ann >>= f = annotated f (\a -> annotated (Noted a) (Noted . (a <>)) . f) ann
 
 instance Comonad (Annotated a) where
-  extract = \case
-    NotBut b -> b
-    Noted _ b -> b
-  duplicate = \case
-    NotBut b -> NotBut (NotBut b)
-    Noted a b -> Noted a (Noted a b)
+  extract = annotated id $ const id
+  duplicate = annotated (NotBut . NotBut) $ \a -> Noted a . Noted a

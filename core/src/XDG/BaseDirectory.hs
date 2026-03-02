@@ -28,7 +28,7 @@ where
 import "base" Control.Applicative (pure, (<*>))
 import "base" Control.Category ((.))
 import "base" Data.Either (Either, either)
-import "base" Data.Function (flip, ($))
+import "base" Data.Function (($))
 import "base" Data.Functor (fmap, (<$>))
 import "base" Data.List.NonEmpty (NonEmpty ((:|)))
 import "base" System.IO (IO)
@@ -69,7 +69,7 @@ getMultipleOrDefault ::
   NonEmpty (BaseDirectory rep) ->
   These (NonEmpty e) (NonEmpty (BaseDirectory rep)) ->
   Annotated (NonEmpty e) (NonEmpty (BaseDirectory rep))
-getMultipleOrDefault def = these (flip Noted def) pure Noted
+getMultipleOrDefault def = these (`Noted` def) pure Noted
 
 dataHome,
   configHome,
@@ -185,7 +185,7 @@ datadir, sysconfdir :: (System.Rep rep) => IO (Annotated (Error rep) (BaseDirect
 --       @$datadir@ defaulting to /usr/share.
 --
 --       —[§4](https://specifications.freedesktop.org/basedir-spec/latest/#referencing)
-datadir = either (flip Noted Default.datadir) NotBut <$> Custom.datadir
+datadir = either (`Noted` Default.datadir) NotBut <$> Custom.datadir
 
 -- |
 --
@@ -198,4 +198,4 @@ datadir = either (flip Noted Default.datadir) NotBut <$> Custom.datadir
 --       /etc.
 --
 --       —[§4](https://specifications.freedesktop.org/basedir-spec/latest/#referencing)
-sysconfdir = either (flip Noted Default.sysconfdir) NotBut <$> Custom.sysconfdir
+sysconfdir = either (`Noted` Default.sysconfdir) NotBut <$> Custom.sysconfdir

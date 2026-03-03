@@ -1,7 +1,11 @@
 {-# LANGUAGE Safe #-}
 
--- | The XDG Base Directory specification describes how to access six different
---   categories of file. Here is the API for accessing each of them:
+-- |
+-- Copyright: 2024 Greg Pfeil
+-- License: AGPL-3.0-only WITH Universal-FOSS-exception-1.0 OR LicenseRef-proprietary
+--
+-- The XDG Base Directory specification describes how to access six different
+-- categories of file. Here is the API for accessing each of them:
 --
 -- # data
 -- - @`withTargetFile` _ `Data`@ – for write-only access to a specific user or
@@ -103,7 +107,7 @@ import qualified "xdg-base-directory-internal" Data.Path.Patch as Patch
 import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
 import "this" Data.Annotated (Annotated (NotBut, Noted), annotated)
 import "this" XDG.BaseDirectory
-  ( binDir,
+  ( binHome,
     cacheHome,
     configDirs,
     configHome,
@@ -424,6 +428,10 @@ withAggregateFiles aggregate filename action =
 -- | This can only write to the targeted file. To read, use `withAggregateFiles`
 --   to access all of the related files.
 --
+--  __TODO__: This should warn if a `System` dir (`datadir` or `sysconfdir`)
+--            isn’t in the the corresponding aggregate list (`XDG_DATA_DIRS` or
+--            `XDG_CONFIG_DIRS`, respectively).
+--
 -- >>> runExceptT $ withTargetFile User Config [posix|myprogram/settings.dhall|] False pure
 -- Right (These (FileError (ConstructionError (Var (...Var "XDG_CONFIG_HOME"...)) :| []) {handle: .../home/example-user/.config/myprogram/settings.dhall})
 withTargetFile ::
@@ -657,7 +665,7 @@ withExecutableFile ::
     (Annotated () (Either (FileError Dir.PathComponent) a))
 withExecutableFile filename truncate action =
   -- TODO: Ensure the file is actually executable
-  -- TODO: Warn if `binDir` isn’t on Path
+  -- TODO: Warn if `binHome` isn’t on Path
   fmap (pure . join) $
     traverse
       ( fmap (first IOError)
@@ -667,7 +675,7 @@ withExecutableFile filename truncate action =
             action
       )
       . first ConstructionError
-      =<< liftIO binDir
+      =<< liftIO binHome
 
 -- |
 --

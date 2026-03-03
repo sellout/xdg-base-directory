@@ -1,6 +1,8 @@
 {-# LANGUAGE Safe #-}
 
 -- |
+-- Copyright: 2024 Greg Pfeil
+-- License: AGPL-3.0-only WITH Universal-FOSS-exception-1.0 OR LicenseRef-proprietary
 --
 --        All paths set in these environment variables must be absolute. If an
 --        implementation encounters a relative path in any of these variables it
@@ -18,10 +20,6 @@ module XDG.BaseDirectory.Var
     configDirs,
     cacheHome,
     runtimeDir,
-
-    -- * make vars
-    datadir,
-    sysconfdir,
   )
 where
 
@@ -146,20 +144,3 @@ cacheHome = envVar "XDG_CACHE_HOME"
 --       is defined by the environment variable @$XDG_RUNTIME_DIR@.
 --       —[§2](https://specifications.freedesktop.org/basedir-spec/latest/#basics)
 runtimeDir = envVar "XDG_RUNTIME_DIR"
-
--- FIXME: These are GNU make variables, the values should be populated at compile time.
---        See https://www.gnu.org/prep/standards/html_node/Directory-Variables.html,
---        https://cabal.readthedocs.io/en/3.2/developing-packages.html#accessing-data-files-from-package-code
---
---        We should probably have the application provide
---        `Paths_<app>.getDataDir` and `Paths_<app>.getSysConfDir` when it sets
---        everything up.
---
---        Maybe we can use ImplicitParams for these?
---
---        No answers, but see
---        https://stackoverflow.com/questions/66215545/hardcode-datadir-path-upon-installing-executable
-
-datadir, sysconfdir :: (System.Rep rep) => EnvironmentVariable rep
-datadir = envVar "datadir"
-sysconfdir = envVar "sysconfdir"

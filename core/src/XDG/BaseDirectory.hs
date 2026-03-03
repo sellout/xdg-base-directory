@@ -3,6 +3,8 @@
 {-# LANGUAGE TypeApplications #-}
 
 -- |
+-- Copyright: 2024 Greg Pfeil
+-- License: AGPL-3.0-only WITH Universal-FOSS-exception-1.0 OR LicenseRef-proprietary
 --
 --       Various specifications specify files and file formats. This
 --       specification defines where these files should be looked for by
@@ -17,9 +19,11 @@ module XDG.BaseDirectory
     configDirs,
     cacheHome,
     runtimeDir,
-    binDir,
+    -- `binHome` can’t be customized, so we just re-export the term from
+    -- `Default`.
+    Default.binHome,
 
-    -- * make vars
+    -- * GNU Make installation directories
     datadir,
     sysconfdir,
   )
@@ -29,22 +33,16 @@ import "base" Control.Applicative (pure, (<*>))
 import "base" Control.Category ((.))
 import "base" Data.Either (Either, either)
 import "base" Data.Function (($))
-import "base" Data.Functor (fmap, (<$>))
+import "base" Data.Functor ((<$>))
 import "base" Data.List.NonEmpty (NonEmpty ((:|)))
 import "base" System.IO (IO)
-import "pathway" Data.Path ((</>))
-import "pathway" Data.Path.TH (posix)
 import qualified "pathway-system" Filesystem.Path as Dir
 import "these" Data.These (These (These, This), these)
 import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
 import "this" Data.Annotated (Annotated (NotBut, Noted))
 import qualified "this" XDG.BaseDirectory.Custom as Custom
 import qualified "this" XDG.BaseDirectory.Default as Default
-import "this" XDG.BaseDirectory.Internal
-  ( BaseDirectory,
-    Error,
-    getHomeDirectory,
-  )
+import "this" XDG.BaseDirectory.Internal (BaseDirectory, Error)
 
 -- | The spec says
 --
@@ -153,27 +151,9 @@ configDirs = getMultipleOrDefault Default.configDirs <$> Custom.configDirs
 runtimeDir :: (System.Rep rep) => IO (Either (Error rep) (BaseDirectory rep))
 runtimeDir = Custom.runtimeDir
 
--- |
---
---       There is a single base directory relative to which user-specific
---       executable files may be written.
---       —[§2](https://specifications.freedesktop.org/basedir-spec/latest/#basics)
---
---       User-specific executable files may be stored in @$HOME@/.local/bin.
---       Distributions should ensure this directory shows up in the UNIX @$PATH@
---       environment variable, at an appropriate place.
---
---        Since @$HOME@ might be shared between systems of different
---       architectures, installing compiled binaries to @$HOME@/.local/bin could
---       cause problems when used on systems of differing architectures. This is
---       often not a problem, but the fact that @$HOME@ becomes partially
---       architecture-specific if compiled binaries are placed in it should be
---       kept in mind.
---       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
-binDir :: IO (Either (Error Dir.PathComponent) (BaseDirectory Dir.PathComponent))
-binDir = fmap (</> [posix|.local/bin/|]) <$> getHomeDirectory
-
-datadir, sysconfdir :: (System.Rep rep) => IO (Annotated (Error rep) (BaseDirectory rep))
+datadir,
+  sysconfdir ::
+    (System.Rep rep) => IO (Annotated (Error rep) (BaseDirectory rep))
 
 -- |
 --

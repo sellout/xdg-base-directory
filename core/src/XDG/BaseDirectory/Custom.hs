@@ -1,5 +1,14 @@
-{-# LANGUAGE Safe #-}
+{-# LANGUAGE Trustworthy #-}
 
+-- |
+-- Copyright: 2024 Greg Pfeil
+-- License: AGPL-3.0-only WITH Universal-FOSS-exception-1.0 OR LicenseRef-proprietary
+--
+-- Values retrieved from the variables defined in "XDG.BaseDirectory.Var" or
+-- [GNU Make
+-- variables](https://www.gnu.org/prep/standards/html_node/Directory-Variables.html)
+-- (which [Cabal allows you to
+-- override](https://cabal.readthedocs.io/en/stable/cabal-package-description-file.html#accessing-data-files-from-package-code)).
 module XDG.BaseDirectory.Custom
   ( dataHome,
     configHome,
@@ -15,27 +24,27 @@ module XDG.BaseDirectory.Custom
   )
 where
 
-import "base" Control.Applicative (pure)
-import "base" Control.Category ((.))
-import "base" Control.Monad ((<=<))
-import "base" Data.Bifunctor (first)
-import "base" Data.Either (Either)
-import "base" Data.Function (($))
-import "base" Data.Functor (fmap)
-import "base" Data.List.NonEmpty (NonEmpty, nonEmpty)
-import "base" Data.Maybe (maybe)
-import "base" System.IO (IO)
-import "pathway" Data.Path (Path, Relativity (Abs), Type (Dir))
-import "these" Data.These (These (This), partitionEithersNE)
-import qualified "xdg-base-directory-internal" Data.Path.Patch as Patch
-import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
-import "this" XDG.BaseDirectory.Internal
+import safe "base" Control.Applicative (pure)
+import safe "base" Control.Category ((.))
+import safe "base" Control.Monad ((<=<))
+import safe "base" Data.Bifunctor (first)
+import safe "base" Data.Either (Either)
+import safe "base" Data.Function (($))
+import safe "base" Data.Functor (fmap, (<$>))
+import safe "base" Data.List.NonEmpty (NonEmpty, nonEmpty)
+import safe "base" Data.Maybe (maybe)
+import safe "base" System.IO (IO)
+import safe "these" Data.These (These (This), partitionEithersNE)
+import safe qualified "xdg-base-directory-internal" Data.Path.Patch as Patch
+import safe qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
+import qualified "this" Paths_xdg_base_directory as Make
+import safe "this" XDG.BaseDirectory.Internal
   ( BaseDirectory,
     Error (NoDirectoriesFound, Var),
     extractAbs,
     weakenEither,
   )
-import qualified "this" XDG.BaseDirectory.Var as Var
+import safe qualified "this" XDG.BaseDirectory.Var as Var
 
 parseDir :: (System.Rep rep) => rep -> Either (Error rep) (BaseDirectory rep)
 parseDir = extractAbs . Patch.parseDirectory
@@ -122,8 +131,29 @@ configDirs = getMultiple Var.configDirs
 runtimeDir :: (System.Rep rep) => IO (Either (Error rep) (BaseDirectory rep))
 runtimeDir = get Var.runtimeDir
 
-datadir,
-  sysconfdir ::
-    (System.Rep rep) => IO (Either (Error rep) (Path 'Abs 'Dir rep))
-datadir = get Var.datadir
-sysconfdir = get Var.sysconfdir
+-- |
+--
+--       Other specifications may reference this specification by specifying the
+--       location of a data file as @$XDG_DATA_DIRS@/subdir/filename. This
+--       implies that:
+--
+--     - Such file should be installed to @$datadir@/subdir/filename with
+--       @$datadir@ defaulting to /usr/share.
+--
+--       —[§4](https://specifications.freedesktop.org/basedir-spec/latest/#referencing)
+datadir :: (System.Rep rep) => IO (Either (Error rep) (BaseDirectory rep))
+datadir = parseDir . System.fromStringLiteral <$> Make.getDataDir
+
+-- |
+--
+--       Specifications may reference this specification by specifying the
+--       location of a configuration file as @$XDG_CONFIG_DIRS@/subdir/filename.
+--       This implies that:
+--
+--     - Default configuration files should be installed to
+--       @$sysconfdir@/xdg/subdir/filename with @$sysconfdir@ defaulting to
+--       /etc.
+--
+--       —[§4](https://specifications.freedesktop.org/basedir-spec/latest/#referencing)
+sysconfdir :: (System.Rep rep) => IO (Either (Error rep) (BaseDirectory rep))
+sysconfdir = parseDir . System.fromStringLiteral <$> Make.getSysconfDir

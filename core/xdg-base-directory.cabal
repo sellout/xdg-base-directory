@@ -213,6 +213,10 @@ library
     XDG.BaseDirectory.Internal
     XDG.BaseDirectory.Opinionated
     XDG.BaseDirectory.Var
+  autogen-modules:
+    Paths_xdg_base_directory
+  other-modules:
+    Paths_xdg_base_directory
 
 test-suite doctests
   import: defaults

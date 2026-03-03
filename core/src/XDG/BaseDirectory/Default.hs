@@ -1,6 +1,12 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE Safe #-}
 
+-- |
+-- Copyright: 2024 Greg Pfeil
+-- License: AGPL-3.0-only WITH Universal-FOSS-exception-1.0 OR LicenseRef-proprietary
+--
+-- The default XDG base directory values that are used for fallbacks when other
+-- values aren’t provided.
 module XDG.BaseDirectory.Default
   ( dataHome,
     configHome,
@@ -8,6 +14,7 @@ module XDG.BaseDirectory.Default
     dataDirs,
     configDirs,
     cacheHome,
+    binHome,
 
     -- * make vars
     datadir,
@@ -25,7 +32,11 @@ import "pathway" Data.Path.TH (posix)
 import qualified "pathway-system" Filesystem.Path as Dir
 import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
 import qualified "this" XDG.BaseDirectory.Default.Relative as Relative
-import "this" XDG.BaseDirectory.Internal (Error, getHomeDirectory)
+import "this" XDG.BaseDirectory.Internal
+  ( BaseDirectory,
+    Error,
+    getHomeDirectory,
+  )
 
 pinHome ::
   Path ('Rel 'False) typ Dir.PathComponent ->
@@ -35,8 +46,9 @@ pinHome rel = fmap (</> rel) <$> getHomeDirectory
 dataHome,
   configHome,
   stateHome,
-  cacheHome ::
-    IO (Either (Error Dir.PathComponent) (Path 'Abs 'Dir Dir.PathComponent))
+  cacheHome,
+  binHome ::
+    IO (Either (Error Dir.PathComponent) (BaseDirectory Dir.PathComponent))
 
 -- |
 --
@@ -54,7 +66,27 @@ stateHome = pinHome Relative.stateHome
 
 cacheHome = pinHome Relative.cacheHome
 
-dataDirs, configDirs :: (System.Rep rep) => NonEmpty (Path 'Abs 'Dir rep)
+-- |
+--
+--       There is a single base directory relative to which user-specific
+--       executable files may be written.
+--       —[§2](https://specifications.freedesktop.org/basedir-spec/latest/#basics)
+--
+--       User-specific executable files may be stored in @$HOME@/.local/bin.
+--       Distributions should ensure this directory shows up in the UNIX @$PATH@
+--       environment variable, at an appropriate place.
+--
+--       Since @$HOME@ might be shared between systems of different
+--       architectures, installing compiled binaries to @$HOME@/.local/bin could
+--       cause problems when used on systems of differing architectures. This is
+--       often not a problem, but the fact that @$HOME@ becomes partially
+--       architecture-specific if compiled binaries are placed in it should be
+--       kept in mind.
+--
+--       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
+binHome = pinHome Relative.binHome
+
+dataDirs, configDirs :: (System.Rep rep) => NonEmpty (BaseDirectory rep)
 
 -- |
 --
@@ -71,5 +103,20 @@ dataDirs = fmap System.fromStringLiteral <$> [posix|/usr/local/share/|] :| [[pos
 configDirs = fmap System.fromStringLiteral <$> [posix|/etc/xdg/|] :| []
 
 datadir, sysconfdir :: (System.Rep rep) => Path 'Abs 'Dir rep
+
+-- |
+--
+--     - Such file should be installed to @$datadir@/subdir/filename with
+--       @$datadir@ defaulting to /usr/share.
+--
+--       —[§4](https://specifications.freedesktop.org/basedir-spec/latest/#referencing)
 datadir = System.fromStringLiteral <$> [posix|/usr/share/|]
+
+-- |
+--
+--     - Default configuration files should be installed to
+--       @$sysconfdir@/xdg/subdir/filename with @$sysconfdir@ defaulting to
+--       /etc.
+--
+--       —[§4](https://specifications.freedesktop.org/basedir-spec/latest/#referencing)
 sysconfdir = System.fromStringLiteral <$> [posix|/etc/|]

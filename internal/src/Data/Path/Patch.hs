@@ -1,5 +1,8 @@
 {-# LANGUAGE Safe #-}
 
+-- |
+-- Copyright: 2024 Greg Pfeil
+-- License: AGPL-3.0-only WITH Universal-FOSS-exception-1.0 OR LicenseRef-proprietary
 module Data.Path.Patch
   ( AnchoredType (..),
     anchorType,

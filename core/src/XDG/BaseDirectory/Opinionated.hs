@@ -1,7 +1,11 @@
 {-# LANGUAGE Safe #-}
 
--- | The XDG Base Directory specification describes how to access six different
---   categories of file. Here is the API for accessing each of them:
+-- |
+-- Copyright: 2024 Greg Pfeil
+-- License: AGPL-3.0-only WITH Universal-FOSS-exception-1.0 OR LicenseRef-proprietary
+--
+-- The XDG Base Directory specification describes how to access six different
+-- categories of file. Here is the API for accessing each of them:
 --
 -- # data
 -- - withTargetFile – for write-only access to a specific user or system data file

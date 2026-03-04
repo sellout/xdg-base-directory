@@ -13,19 +13,21 @@ module XDG.BaseDirectory.Internal.System
   )
 where
 
+import safe "base" Control.Applicative (pure)
 import safe "base" Control.Category (id)
-import "base" Control.Monad.IO.Class (MonadIO, liftIO)
+import safe "base" Control.Monad.IO.Class (MonadIO, liftIO)
 import safe "base" Data.Bool (Bool)
 import safe qualified "base" Data.Char as Base
 import safe "base" Data.Function (($))
 import safe qualified "base" Data.Kind as Kind
 import safe "base" Data.Maybe (Maybe)
+import safe "base" Data.Monoid (Monoid)
 import safe "base" Data.String (String)
 import safe qualified "base" System.Environment as F.Env
 import safe "base" System.IO (Handle, IO, IOMode)
 import safe qualified "base" System.IO as F.IO
 import qualified "directory" System.Directory as F.Dir
-import "exceptions" Control.Monad.Catch (MonadMask, bracket)
+import safe "exceptions" Control.Monad.Catch (MonadMask, bracket)
 import safe qualified "filepath" System.FilePath as F.Path
 
 -- TODO: `OsString` was introduced in filepath-1.4.100, but there was no
@@ -34,7 +36,6 @@ import safe qualified "filepath" System.FilePath as F.Path
 --       though.
 #if MIN_VERSION_filepath(1, 4, 100)
 import safe "base" Control.Category ((.))
-import "base" System.IO.Unsafe (unsafePerformIO)
 import qualified "directory" System.Directory.Internal as O.In
 import qualified "directory" System.Directory.OsPath as O.Dir
 import qualified "file-io" System.File.OsPath as O.IO
@@ -50,11 +51,11 @@ withFile' openFile filePath mode =
 
 -- | This wraps the underlying operations we use, so we can parameterize over
 --   string types.
-class Rep (a :: Kind.Type) where
+class (Monoid a) => Rep (a :: Kind.Type) where
   type Char a
   createDirectoryIfMissing :: Bool -> a -> IO ()
   doesDirectoryExist :: a -> IO Bool
-  fromStringLiteral :: String -> a
+  fromStringLiteral :: String -> IO a
   getHomeDirectory :: IO a
   isValid :: a -> Bool
   joinPath :: [a] -> a
@@ -75,7 +76,7 @@ instance Rep String where
   type Char String = Base.Char
   createDirectoryIfMissing = F.Dir.createDirectoryIfMissing
   doesDirectoryExist = F.Dir.doesDirectoryExist
-  fromStringLiteral = id
+  fromStringLiteral = pure
   getHomeDirectory = F.Dir.getHomeDirectory
   isValid = F.Path.isValid
   lookupEnv = F.Env.lookupEnv
@@ -94,7 +95,7 @@ instance Rep OsString where
   type Char OsString = OsChar
   createDirectoryIfMissing = O.Dir.createDirectoryIfMissing
   doesDirectoryExist = O.Dir.doesDirectoryExist
-  fromStringLiteral = unsafePerformIO . O.Path.encodeUtf
+  fromStringLiteral = O.Path.encodeUtf
   getHomeDirectory = O.Dir.getHomeDirectory
   isValid = O.Path.isValid
   joinPath = O.Path.joinPath

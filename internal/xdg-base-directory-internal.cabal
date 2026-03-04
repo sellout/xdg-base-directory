@@ -201,7 +201,9 @@ library
     filepath,
     pathway,
     pathway-internal,
+    pathway-system,
     strict,
+    transformers,
     yaya ^>= {0.6.2.2},
   if impl(ghc >= 9.6.1)
     build-depends:

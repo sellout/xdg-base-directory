@@ -31,12 +31,14 @@ where
 
 import "base" Control.Applicative (pure, (<*>))
 import "base" Control.Category ((.))
+import "base" Control.Monad ((=<<))
 import "base" Data.Either (Either, either)
 import "base" Data.Function (($))
 import "base" Data.Functor ((<$>))
 import "base" Data.List.NonEmpty (NonEmpty ((:|)))
+import "base" Data.String (String)
+import "base" Data.Traversable (traverse)
 import "base" System.IO (IO)
-import qualified "pathway-system" Filesystem.Path as Dir
 import "these" Data.These (These (These, This), these)
 import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
 import "this" Data.Annotated (Annotated (NotBut, Noted))
@@ -73,7 +75,7 @@ dataHome,
   configHome,
   stateHome,
   cacheHome ::
-    IO (These (NonEmpty (Error Dir.PathComponent)) (BaseDirectory Dir.PathComponent))
+    (System.Rep rep) => IO (These (NonEmpty Error) (BaseDirectory rep))
 dataHome = getOrDefault <$> Default.dataHome <*> Custom.dataHome
 configHome = getOrDefault <$> Default.configHome <*> Custom.configHome
 
@@ -93,7 +95,10 @@ stateHome = getOrDefault <$> Default.stateHome <*> Custom.stateHome
 
 cacheHome = getOrDefault <$> Default.cacheHome <*> Custom.cacheHome
 
-dataDirs, configDirs :: (System.Rep rep) => IO (Annotated (NonEmpty (Error rep)) (NonEmpty (BaseDirectory rep)))
+dataDirs,
+  configDirs ::
+    (System.Rep rep) =>
+    IO (Annotated (NonEmpty Error) (NonEmpty (BaseDirectory rep)))
 
 -- |
 --
@@ -102,7 +107,10 @@ dataDirs, configDirs :: (System.Rep rep) => IO (Annotated (NonEmpty (Error rep))
 --       @$XDG_DATA_HOME@ base directory. The directories in @$XDG_DATA_DIRS@
 --       should be separated with a colon ':'.
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
-dataDirs = getMultipleOrDefault Default.dataDirs <$> Custom.dataDirs
+dataDirs =
+  getMultipleOrDefault
+    <$> traverse (traverse System.fromStringLiteral) Default.dataDirs
+    <*> Custom.dataDirs
 
 -- |
 --
@@ -111,7 +119,10 @@ dataDirs = getMultipleOrDefault Default.dataDirs <$> Custom.dataDirs
 --       @$XDG_CONFIG_HOME@ base directory. The directories in
 --       @$XDG_CONFIG_DIRS@ should be separated with a colon ':'.
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
-configDirs = getMultipleOrDefault Default.configDirs <$> Custom.configDirs
+configDirs =
+  getMultipleOrDefault
+    <$> traverse (traverse System.fromStringLiteral) Default.configDirs
+    <*> Custom.configDirs
 
 -- |
 --
@@ -148,12 +159,22 @@ configDirs = getMultipleOrDefault Default.configDirs <$> Custom.configDirs
 --       it might reside in runtime memory and cannot necessarily be swapped out
 --       to disk.
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
-runtimeDir :: (System.Rep rep) => IO (Either (Error rep) (BaseDirectory rep))
+runtimeDir :: (System.Rep rep) => IO (Either Error (BaseDirectory rep))
 runtimeDir = Custom.runtimeDir
+
+makeDir ::
+  (System.Rep rep) =>
+  BaseDirectory String ->
+  Either e (BaseDirectory rep) ->
+  IO (Annotated e (BaseDirectory rep))
+makeDir def =
+  either
+    (\e -> Noted e <$> traverse System.fromStringLiteral def)
+    (pure . NotBut)
 
 datadir,
   sysconfdir ::
-    (System.Rep rep) => IO (Annotated (Error rep) (BaseDirectory rep))
+    (System.Rep rep) => IO (Annotated Error (BaseDirectory rep))
 
 -- |
 --
@@ -165,7 +186,7 @@ datadir,
 --       @$datadir@ defaulting to /usr/share.
 --
 --       —[§4](https://specifications.freedesktop.org/basedir-spec/latest/#referencing)
-datadir = either (`Noted` Default.datadir) NotBut <$> Custom.datadir
+datadir = makeDir Default.datadir =<< Custom.datadir
 
 -- |
 --
@@ -178,4 +199,4 @@ datadir = either (`Noted` Default.datadir) NotBut <$> Custom.datadir
 --       /etc.
 --
 --       —[§4](https://specifications.freedesktop.org/basedir-spec/latest/#referencing)
-sysconfdir = either (`Noted` Default.sysconfdir) NotBut <$> Custom.sysconfdir
+sysconfdir = makeDir Default.sysconfdir =<< Custom.sysconfdir

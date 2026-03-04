@@ -18,17 +18,15 @@ import "base" Control.Applicative (empty, pure)
 import "base" Control.Category ((.))
 import "base" Control.Exception (tryJust)
 import "base" Control.Monad ((=<<))
-import "base" Data.Bifunctor (first)
 import "base" Data.Either (Either (Left), either)
 import "base" Data.Eq (Eq)
-import "base" Data.Foldable (Foldable)
 import "base" Data.Function (($))
-import "base" Data.Functor (Functor, fmap)
+import "base" Data.Functor ((<$>))
 import qualified "base" Data.Kind as Kind
 import "base" Data.Maybe (Maybe, maybe)
-import "base" Data.Traversable (Traversable)
+import "base" Data.String (String)
 import "base" Data.Void (Void)
-import "base" GHC.Generics (Generic, Generic1)
+import "base" GHC.Generics (Generic)
 import "base" System.IO (IO)
 import "base" System.IO.Error (IOError, isDoesNotExistError)
 import "base" Text.Show (Show)
@@ -36,7 +34,6 @@ import "pathway" Data.Path (Path, Type (Dir))
 import "pathway" Data.Path.Relativity (Relativity (Abs, Any))
 import qualified "pathway-system" Filesystem.Path as Dir
 import "these" Data.These (These (That, This))
-import "transformers" Control.Monad.Trans.Except (runExceptT)
 import qualified "xdg-base-directory-internal" Data.Path.Patch as Patch
 import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
 
@@ -44,27 +41,21 @@ import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System
 --
 --  __NB__: This is lacking `Ord` and `Read` instances because `IOError` is
 --          missing them.
-data VarError (rep :: Kind.Type)
-  = MissingVar rep (Maybe IOError)
-  | EmptyVar rep
+data VarError
+  = MissingVar String (Maybe IOError)
+  | EmptyVar String
   deriving stock (Eq, Generic, Show)
-  deriving stock (Foldable, Functor, Generic1, Traversable)
-
-type role VarError representational
 
 -- |
 --
 --  __NB__: This is lacking `Ord` and `Read` instances because
 --          `Dir.InternalFailure` is missing them.
-data Error (rep :: Kind.Type)
-  = Var (VarError rep)
+data Error
+  = Var VarError
   | NoDirectoriesFound -- only for directory lists
   | RelativeDirectory
   | Pathway (Dir.InternalFailure Dir.PathRep Void)
   deriving stock (Eq, Generic, Show)
-  deriving stock (Foldable, Functor, Generic1, Traversable)
-
-type role Error representational
 
 -- |
 --
@@ -84,22 +75,19 @@ note e = maybe (Left e) pure
 weakenEither :: Either a b -> These a b
 weakenEither = either This That
 
-extractAbs :: Path 'Any typ rep -> Either (Error rep) (Path 'Abs typ rep)
+extractAbs :: Path 'Any typ rep -> Either Error (Path 'Abs typ rep)
 extractAbs = note RelativeDirectory . getAbs . Patch.anchorType
 
 -- |
 --
 --  __FIXME__: This should be coming from a Pathway lib.
-getHomeDirectory ::
-  IO (Either (Error Dir.PathComponent) (Path 'Abs 'Dir Dir.PathComponent))
+getHomeDirectory :: (System.Rep rep) => IO (Either Error (Path 'Abs 'Dir rep))
 getHomeDirectory =
-  fmap (first Pathway =<<)
-    . tryJust
+  (extractAbs . Patch.parseDirectory =<<)
+    <$> tryJust
       ( \e ->
           if isDoesNotExistError e
-            then
-              pure . Var . MissingVar (System.fromStringLiteral "HOME") $
-                pure e
+            then pure . Var . MissingVar "HOME" $ pure e
             else empty
       )
-    $ runExceptT Dir.getHomeDirectory
+      System.getHomeDirectory

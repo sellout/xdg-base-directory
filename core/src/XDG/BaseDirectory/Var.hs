@@ -25,44 +25,39 @@ where
 
 import "base" Control.Applicative (pure)
 import "base" Control.Category ((.))
-import "base" Control.Monad ((<=<))
-import "base" Data.Data (Data)
+import "base" Control.Monad ((<=<), (=<<))
 import "base" Data.Either (Either (Left))
 import "base" Data.Eq (Eq)
-import "base" Data.Foldable (Foldable)
 import "base" Data.Function (($))
-import "base" Data.Functor (Functor, (<$>))
-import qualified "base" Data.Kind as Kind
+import "base" Data.Functor (fmap)
 import "base" Data.Maybe (Maybe (Nothing))
 import "base" Data.Ord (Ord)
 import "base" Data.String (String)
-import "base" Data.Traversable (Traversable)
-import "base" GHC.Generics (Generic, Generic1)
+import "base" GHC.Generics (Generic)
 import "base" System.IO (IO)
 import "base" Text.Read (Read)
 import "base" Text.Show (Show)
 import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
 import "this" XDG.BaseDirectory.Internal (VarError (EmptyVar, MissingVar), note)
 
-newtype EnvironmentVariable (rep :: Kind.Type) = EnvVar rep
-  deriving stock (Data, Eq, Generic, Ord, Read, Show)
-  deriving stock (Foldable, Functor, Generic1, Traversable)
+newtype EnvironmentVariable = EnvVar String
+  deriving stock (Eq, Generic, Ord, Read, Show)
 
-type role EnvironmentVariable representational
-
-envVar :: (System.Rep rep) => String -> EnvironmentVariable rep
-envVar = EnvVar . System.fromStringLiteral
+envVar :: String -> EnvironmentVariable
+envVar = EnvVar
 
 -- | The spec says “If [a variable] is either not set or empty, a default […]
 --   should be used.” This makes sure we handle all environment variables that
 --   way.
 lookupNonEmptyEnv ::
-  (System.Rep rep) => EnvironmentVariable rep -> IO (Either (VarError rep) rep)
+  (System.Rep rep) => EnvironmentVariable -> IO (Either VarError rep)
 lookupNonEmptyEnv (EnvVar varName) =
-  ( (\val -> if System.isValid val then Left $ EmptyVar varName else pure val)
-      <=< note (MissingVar varName Nothing)
-  )
-    <$> System.lookupEnv varName
+  fmap
+    ( (\val -> if System.isValid val then Left $ EmptyVar varName else pure val)
+        <=< note (MissingVar varName Nothing)
+    )
+    . System.lookupEnv
+    =<< System.fromStringLiteral varName
 
 dataHome,
   configHome,
@@ -71,7 +66,7 @@ dataHome,
   configDirs,
   cacheHome,
   runtimeDir ::
-    (System.Rep rep) => EnvironmentVariable rep
+    EnvironmentVariable
 
 -- |
 --

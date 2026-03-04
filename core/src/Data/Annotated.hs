@@ -1,4 +1,5 @@
 {-# LANGUAGE Safe #-}
+{-# OPTIONS_GHC -fplugin-opt NoRecursion:ignore-methods:sconcat,stimes #-}
 
 -- |
 -- Copyright: 2024 Greg Pfeil
@@ -20,6 +21,7 @@ import "base" Data.Foldable (Foldable)
 import "base" Data.Function (const, ($))
 import "base" Data.Functor (Functor)
 import qualified "base" Data.Kind as Kind
+import "base" Data.Monoid (Monoid, mempty)
 import "base" Data.Ord (Ord)
 import "base" Data.Semigroup (Semigroup, (<>))
 import "base" Data.Traversable (Traversable)
@@ -66,6 +68,9 @@ instance (Semigroup a) => Applicative (Annotated a) where
 
 instance (Semigroup a, Semigroup b) => Semigroup (Annotated a b) where
   (<>) = liftA2 (<>)
+
+instance (Semigroup a, Monoid b) => Monoid (Annotated a b) where
+  mempty = NotBut mempty
 
 instance (Semigroup a) => Monad (Annotated a) where
   ann >>= f = annotated f (\a -> annotated (Noted a) (Noted . (a <>)) . f) ann

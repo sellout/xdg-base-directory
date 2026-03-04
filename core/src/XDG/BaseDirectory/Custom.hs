@@ -26,11 +26,11 @@ where
 
 import safe "base" Control.Applicative (pure)
 import safe "base" Control.Category ((.))
-import safe "base" Control.Monad ((<=<))
+import safe "base" Control.Monad ((<=<), (=<<))
 import safe "base" Data.Bifunctor (first)
 import safe "base" Data.Either (Either)
 import safe "base" Data.Function (($))
-import safe "base" Data.Functor (fmap, (<$>))
+import safe "base" Data.Functor (fmap)
 import safe "base" Data.List.NonEmpty (NonEmpty, nonEmpty)
 import safe "base" Data.Maybe (maybe)
 import safe "base" System.IO (IO)
@@ -46,28 +46,32 @@ import safe "this" XDG.BaseDirectory.Internal
   )
 import safe qualified "this" XDG.BaseDirectory.Var as Var
 
-parseDir :: (System.Rep rep) => rep -> Either (Error rep) (BaseDirectory rep)
+parseDir :: (System.Rep rep) => rep -> Either Error (BaseDirectory rep)
 parseDir = extractAbs . Patch.parseDirectory
 
 get ::
   (System.Rep rep) =>
-  Var.EnvironmentVariable rep ->
-  IO (Either (Error rep) (BaseDirectory rep))
+  Var.EnvironmentVariable -> IO (Either Error (BaseDirectory rep))
 get = fmap (parseDir <=< first Var) . Var.lookupNonEmptyEnv
 
 getMultiple ::
   (System.Rep rep) =>
-  Var.EnvironmentVariable rep ->
-  IO (These (NonEmpty (Error rep)) (NonEmpty (BaseDirectory rep)))
+  Var.EnvironmentVariable ->
+  IO (These (NonEmpty Error) (NonEmpty (BaseDirectory rep)))
 getMultiple =
-  fmap (maybe (This $ pure NoDirectoriesFound) (partitionEithersNE . fmap parseDir) . nonEmpty . System.splitSearchPath <=< weakenEither . first (pure . Var))
+  fmap
+    ( maybe (This $ pure NoDirectoriesFound) (partitionEithersNE . fmap parseDir)
+        . nonEmpty
+        . System.splitSearchPath
+        <=< weakenEither . first (pure . Var)
+    )
     . Var.lookupNonEmptyEnv
 
 dataHome,
   configHome,
   stateHome,
   cacheHome ::
-    (System.Rep rep) => IO (Either (Error rep) (BaseDirectory rep))
+    (System.Rep rep) => IO (Either Error (BaseDirectory rep))
 
 -- |
 --
@@ -104,7 +108,7 @@ cacheHome = get Var.cacheHome
 dataDirs,
   configDirs ::
     (System.Rep rep) =>
-    IO (These (NonEmpty (Error rep)) (NonEmpty (BaseDirectory rep)))
+    IO (These (NonEmpty Error) (NonEmpty (BaseDirectory rep)))
 
 -- |
 --
@@ -128,7 +132,7 @@ configDirs = getMultiple Var.configDirs
 --       runtime files and other file objects should be placed. This directory
 --       is defined by the environment variable @$XDG_RUNTIME_DIR@.
 --       —[§2](https://specifications.freedesktop.org/basedir-spec/latest/#basics)
-runtimeDir :: (System.Rep rep) => IO (Either (Error rep) (BaseDirectory rep))
+runtimeDir :: (System.Rep rep) => IO (Either Error (BaseDirectory rep))
 runtimeDir = get Var.runtimeDir
 
 -- |
@@ -141,8 +145,8 @@ runtimeDir = get Var.runtimeDir
 --       @$datadir@ defaulting to /usr/share.
 --
 --       —[§4](https://specifications.freedesktop.org/basedir-spec/latest/#referencing)
-datadir :: (System.Rep rep) => IO (Either (Error rep) (BaseDirectory rep))
-datadir = parseDir . System.fromStringLiteral <$> Make.getDataDir
+datadir :: (System.Rep rep) => IO (Either Error (BaseDirectory rep))
+datadir = fmap parseDir . System.fromStringLiteral =<< Make.getDataDir
 
 -- |
 --
@@ -155,5 +159,5 @@ datadir = parseDir . System.fromStringLiteral <$> Make.getDataDir
 --       /etc.
 --
 --       —[§4](https://specifications.freedesktop.org/basedir-spec/latest/#referencing)
-sysconfdir :: (System.Rep rep) => IO (Either (Error rep) (BaseDirectory rep))
-sysconfdir = parseDir . System.fromStringLiteral <$> Make.getSysconfDir
+sysconfdir :: (System.Rep rep) => IO (Either Error (BaseDirectory rep))
+sysconfdir = fmap parseDir . System.fromStringLiteral =<< Make.getSysconfDir

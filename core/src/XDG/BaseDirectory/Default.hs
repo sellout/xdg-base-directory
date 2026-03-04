@@ -22,14 +22,17 @@ module XDG.BaseDirectory.Default
   )
 where
 
+import "base" Control.Applicative (liftA2, pure)
+import "base" Control.Category ((.))
 import "base" Data.Bool (Bool (False))
 import "base" Data.Either (Either)
-import "base" Data.Functor (fmap, (<$>))
+import "base" Data.Functor (fmap)
 import "base" Data.List.NonEmpty (NonEmpty ((:|)))
+import "base" Data.String (IsString, String)
+import "base" Data.Traversable (Traversable, traverse)
 import "base" System.IO (IO)
-import "pathway" Data.Path (Path, Relativity (Abs, Rel), Type (Dir), (</>))
+import "pathway" Data.Path (Filename, Path, Relativity (Abs, Rel), (</>))
 import "pathway" Data.Path.TH (posix)
-import qualified "pathway-system" Filesystem.Path as Dir
 import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
 import qualified "this" XDG.BaseDirectory.Default.Relative as Relative
 import "this" XDG.BaseDirectory.Internal
@@ -39,16 +42,17 @@ import "this" XDG.BaseDirectory.Internal
   )
 
 pinHome ::
-  Path ('Rel 'False) typ Dir.PathComponent ->
-  IO (Either (Error Dir.PathComponent) (Path 'Abs typ Dir.PathComponent))
-pinHome rel = fmap (</> rel) <$> getHomeDirectory
+  (Traversable (Filename typ), System.Rep rep) =>
+  Path ('Rel 'False) typ String ->
+  IO (Either Error (Path 'Abs typ rep))
+pinHome = liftA2 (\h r -> fmap (</> r) h) getHomeDirectory . traverse System.fromStringLiteral
 
 dataHome,
   configHome,
   stateHome,
   cacheHome,
   binHome ::
-    IO (Either (Error Dir.PathComponent) (BaseDirectory Dir.PathComponent))
+    (System.Rep rep) => IO (Either Error (BaseDirectory rep))
 
 -- |
 --
@@ -59,7 +63,9 @@ dataHome = pinHome Relative.dataHome
 
 -- |
 --
---       If @$XDG_CONFIG_HOME@ is either not set or empty, a default equal to @$HOME@/.config should be used.
+--       If @$XDG_CONFIG_HOME@ is either not set or empty, a default equal to
+--       @$HOME@/.config should be used.
+--       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
 configHome = pinHome Relative.configHome
 
 stateHome = pinHome Relative.stateHome
@@ -86,23 +92,23 @@ cacheHome = pinHome Relative.cacheHome
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
 binHome = pinHome Relative.binHome
 
-dataDirs, configDirs :: (System.Rep rep) => NonEmpty (BaseDirectory rep)
+dataDirs, configDirs :: (IsString rep) => NonEmpty (BaseDirectory rep)
 
 -- |
 --
 --        If @$XDG_DATA_DIRS@ is either not set or empty, a value equal to
 --        /usr/local/share/:/usr/share/ should be used.
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
-dataDirs = fmap System.fromStringLiteral <$> [posix|/usr/local/share/|] :| [[posix|/usr/share/|]]
+dataDirs = [posix|/usr/local/share/|] :| [[posix|/usr/share/|]]
 
 -- |
 --
 --        If @$XDG_CONFIG_DIRS@ is either not set or empty, a value equal to
 --        /etc/xdg should be used.
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
-configDirs = fmap System.fromStringLiteral <$> [posix|/etc/xdg/|] :| []
+configDirs = pure [posix|/etc/xdg/|]
 
-datadir, sysconfdir :: (System.Rep rep) => Path 'Abs 'Dir rep
+datadir, sysconfdir :: (IsString rep) => BaseDirectory rep
 
 -- |
 --
@@ -110,7 +116,7 @@ datadir, sysconfdir :: (System.Rep rep) => Path 'Abs 'Dir rep
 --       @$datadir@ defaulting to /usr/share.
 --
 --       —[§4](https://specifications.freedesktop.org/basedir-spec/latest/#referencing)
-datadir = System.fromStringLiteral <$> [posix|/usr/share/|]
+datadir = [posix|/usr/share/|]
 
 -- |
 --
@@ -119,4 +125,4 @@ datadir = System.fromStringLiteral <$> [posix|/usr/share/|]
 --       /etc.
 --
 --       —[§4](https://specifications.freedesktop.org/basedir-spec/latest/#referencing)
-sysconfdir = System.fromStringLiteral <$> [posix|/etc/|]
+sysconfdir = [posix|/etc/|]

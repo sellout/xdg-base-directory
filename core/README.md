@@ -10,16 +10,45 @@ This tries to capture the spec as precisely as possible, and gives the user a sa
 
 ## usage
 
-**NB**: This library exposes [Pathway](https://github.com/sellout/pathway) types for typed filepaths. You’ll have to make some use of it directly to work with this library.
+**NB**: This library exposes [Pathway](https://github.com/sellout/pathway) types for typed file paths. You’ll have to make some use of it directly to work with this library.
 
 The recommended entry point to this library is [`XDG.BaseDirectory.Opinionated`](./src/XDG/BaseDirectory/Opinionated.hs). It implements [§4](https://specifications.freedesktop.org/basedir-spec/0.8/#referencing) of the spec, which is generally overlooked by libraries implementing the spec.
 
-If that is too inflexible for you, 1. open an issue (or PR) and 2. use one of the other modules.
+If that’s too inflexible for you, 1. open an issue (or PR) and 2. use one of the other modules.
 
 - [`XDG.BaseDirectory.IO`](./src/XDG/BaseDirectory/IO.hs) has a similar interface, but doesn’t enforce the program subdirectory.
 - [`XDG.BaseDirectory`](./src/XDG/BaseDirectory.hs) exposes the base directories directly, allowing you to do pretty much anything.
 
-If you are integrating this with a library that handles things differently on different platforms (e.g., macOS and Windows), [`XDG.BaseDirectory.Custom`](./src/XDG.BaseDirectory/Custom.hs) gets provides only the values set in the environment, allowing you to use different defaults on different platforms.
+### lower-level
+
+For particular use cases, you might need deeper access to things.
+
+For example, if you’re integrating this with a library that handles things differently on different platforms (like macOS and Windows), [`XDG.BaseDirectory.Custom`](./src/XDG.BaseDirectory/Custom.hs) provides only the values set in the environment, allowing you to use different defaults on different platforms.
+
+
+A number of modules expose roughly the same ten identifiers:
+
+|              | `BaseDirectory` | `.Var` | `.Default` | `.Default.Relative` | `.Custom` |
+|--------------|-----------------|--------|------------|---------------------|-----------|
+| `configHome` | ✔               | ✔      | ✔          | ✔                   | ✔         |
+| `stateHome`  | ✔               | ✔      | ✔          | ✔                   | ✔         |
+| `cacheHome`  | ✔               | ✔      | ✔          | ✔                   | ✔         |
+| `dataDirs`   | ✔               | ✔      | ✔          |                     | ✔         |
+| `configDirs` | ✔               | ✔      | ✔          |                     | ✔         |
+| `runtimeDir` | ✔               | ✔      |            |                     | ✔         |
+| `binHome`    | ✔               |        | ✔          | ✔                   |           |
+| `datadir`    | ✔               |        | ✔          |                     | ✔         |
+| `sysconfdir` | ✔               |        | ✔          |                     | ✔         |
+
+The first six of these correspond to the `XDG_*` variables defined by the XDG base directory specification. The other three are slightly different: `binHome` refers specifically to ‘.local/bin/’, which is defined in the spec, but doesn’t have a variable associated with it; and `datadir` & `sysconfdir` are GNU Make variables that are determined at _compile_ time (they’re referenced in the spec, but aren’t defined by it).
+
+The modules that expose these are:
+
+- `XDG.BaseDirectory` – the fully resolved values – using those from `XDG.BaseDirectory.Custom` and falling back to `XDG.BaseDirectory.Default` when there’s no variable set. This is similar to the API offered by most such libraries.
+- `XDG.BaseDirectory.Var` – the environment variables themselves (so only exposes the first seven identifiers)
+- `XDG.BaseDirectory.Default` – the default values from the spec, which are defined for everything except `runtimeDir`
+- `XDG.BaseDirectory.Default.Relative` – relative versions (that is, without `$HOME`) of all the `*Home` identifiers
+- `XDG.BaseDirectory.Custom` – values read from the variables either in `XDG.BaseDirectory.Var` or the GNU Make variables (this doesn’t expose `binHome`, because that isn’t customizable)
 
 ### deviations from the spec
 

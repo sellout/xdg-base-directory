@@ -7,34 +7,44 @@
 -- The XDG Base Directory specification describes how to access six different
 -- categories of file. Here is the API for accessing each of them:
 --
--- # data
--- - withTargetFile – for write-only access to a specific user or system data file
--- - withAggregateFiles – for read-only access to a sequence of data files
+-- == data
 --
--- # config
--- - withTargetFile – for write-only access to a specific user or system configuration file
--- - withAggregateFiles – for read-only access to a sequence of configuration files
+-- - @`withTargetFile` _ `Data`@ – for write-only access to a specific user or
+--   system data file
+-- - @`withAggregateFiles` `Data`@ – for read-only access to a sequence of data
+--   files
 --
--- # state
--- - withUserFile – for write access to a specific state file
--- - withUserFileRO – for read-only access to a specific state file
+-- == config
 --
--- # executable
--- - withExecutableFile -- for write-only access to a specific executable file
+-- - @`withTargetFile` _ `Config`@ – for write-only access to a specific user or
+--   system configuration file
+-- - @`withAggregateFiles` `Config`@ – for read-only access to a sequence of
+--   configuration files
+--
+-- == state
+--
+-- - @`withUserFile` `State`@ – for write access to a specific state file
+-- - @`withUserFileRO` `State`@ – for read-only access to a specific state file
+--
+-- == executable
+--
+-- - `withExecutableFile` -- for write-only access to a specific executable file
 --
 --   Executable files can only be written, and XDG doesn’t allow configuration
 --   of the directory used. To read executables, you should check the @PATH@
 --   environment variable. This function will warn if you try to write a file
---   and @$HOME/.local/bin/@ isn’t on the @PATH@. Unlike the other types of
+--   and @$HOME\/.local\/bin\/@ isn’t on the @PATH@. Unlike the other types of
 --   files, this one doesn’t go into a program-specific subdirectory.
 --
--- # cache
--- - withUserFile – for write access to a specific cache file
--- - withUserFileRO – for read-only access to a specific cache file
+-- == cache
 --
--- # runtime
--- - withRuntimeFile – for write access to a specific runtime file
--- - withRuntimeFileRO – for read-only access to a specific runtime file
+-- - @`withUserFile` `Cache`@ – for write access to a specific cache file
+-- - @`withUserFileRO` `Cache`@ – for read-only access to a specific cache file
+--
+-- == runtime
+--
+-- - `withRuntimeFile` – for write access to a specific runtime file
+-- - `withRuntimeFileRO` – for read-only access to a specific runtime file
 --
 --   The runtime directory has special requirements, and these operations check
 --   them as much as possible. If the requirements aren’t met when trying to
@@ -48,6 +58,7 @@ module XDG.BaseDirectory.Opinionated
     FileError (..),
     WriteError (..),
     Operations,
+    bleedingOperations,
     subdirOperations,
     withUserFile,
     withUserFileRO,
@@ -67,6 +78,7 @@ import "base" Data.Function (flip)
 import qualified "base" Data.Kind as Kind
 import "base" Data.List.NonEmpty (NonEmpty)
 import "base" Data.Maybe (Maybe)
+import "base" Data.Ord (Ord)
 import "base" System.IO (Handle)
 import "exceptions" Control.Monad.Catch (MonadMask)
 import "pathway" Data.Path (Path, Relativity (Rel), Type (File), (</>))
@@ -74,6 +86,7 @@ import qualified "pathway" Data.Path.Directory as Directory
 import qualified "pathway-system" Filesystem.Path as Dir
 import "these" Data.These (These)
 import "transformers" Control.Monad.Trans.Except (ExceptT)
+import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
 import "this" Data.Annotated (Annotated)
 import "this" XDG.BaseDirectory.IO
   ( Aggregate (Config, Data),
@@ -119,18 +132,21 @@ import "this" XDG.BaseDirectory.Internal (BaseDirectory, Error)
 --
 --   These operations all have a similar parameter structure
 --
---       [Program] [PathContext] RelativeFile [IOMode] [Action]
+--       \[Program] [PathContext] RelativeFile [IOMode] [Action]
 --
---  To give you an idea where the files referenced live, you can view it as
---  @/PathContext/Program/RelativeFile@. So a call like @`withTargetDir`
---  myprogram `User` `Config` [posix|settings.dhall|]@ would be mapped like
---  @/User/Config/myprogram/settings.dhall@, which becomes a literal path like
---  @$HOME/.config/myprogram/settings.dhall@, assuming the default values.
+--   To give you an idea where the files referenced live, you can view it as
+--   @\/PathContext\/Program\/RelativeFile@. So a call like
 --
---  The __Program__ is actually a record of these operations, but it fixes the
---  particular subdirectory within each XDG Base Directory that your program
---  will access. `withExecutableFile` doesn’t have a Program parameter, because
---  all executables are placed into the same directory.
+-- > withTargetDir myprogram User Config [posix|settings.dhall|]
+--
+--   would be mapped like @\/User\/Config\/myprogram\/settings.dhall@, which
+--   becomes a literal path like @$HOME\/.config\/myprogram\/settings.dhall@,
+--   assuming the default values.
+--
+--   The __Program__ is actually a record of these operations, but it fixes the
+--   particular subdirectory within each XDG Base Directory that your program
+--   will access. `withExecutableFile` doesn’t have a Program parameter, because
+--   all executables are placed into the same directory.
 --
 --   The __PathContext__ says what part of the XDG Base Directory structure
 --   we’re trying to access. It varies depending on the call. In some (like
@@ -154,7 +170,7 @@ import "this" XDG.BaseDirectory.Internal (BaseDirectory, Error)
 --
 -- >>> let myprogram = subdirOperations "myprogram" $ pure [posix|/run/whatever/|]
 data Operations (rep :: Kind.Type) = Operations
-  { -- | Write (or read/write) a file in either the `Cache` or `State` directory.
+  { -- | Write (or read\/write) a file in either the `Cache` or `State` directory.
     --
     -- >>> runExceptT $ withUserFile myprogram State [posix|archive.db|] ReadWriteMode pure
     -- Right (These (FileError (ConstructionError (Var (...Var "XDG_STATE_HOME"...)) :| []) {handle: .../home/example-user/.local/state/myprogram/archive.db})
@@ -183,8 +199,8 @@ data Operations (rep :: Kind.Type) = Operations
     -- | Open the set of `Config` or `Data` files for reading.
     --   To write to (some of) these files, use `withTargetFile`.
     --
-    --        A specification that refers to `$XDG_DATA_DIRS` or
-    --        `$XDG_CONFIG_DIRS` should define what the behaviour must be when a
+    --        A specification that refers to @$XDG_DATA_DIRS@ or
+    --        @$XDG_CONFIG_DIRS@ should define what the behaviour must be when a
     --        file is located under multiple base directories. It could, for
     --        example, define that only the file under the most important base
     --        directory should be used or, as another example, it could define
@@ -249,7 +265,7 @@ data Operations (rep :: Kind.Type) = Operations
       Path ('Rel 'False) 'File rep ->
       IOWriteMode ->
       Maybe Bool ->
-      (Error rep -> m ()) ->
+      (Error -> m ()) ->
       (Handle -> m a) ->
       ExceptT
         Dir.MaybeParentCreationFailure
@@ -260,36 +276,29 @@ data Operations (rep :: Kind.Type) = Operations
       forall m a.
       (MonadIO m, MonadMask m) =>
       Path ('Rel 'False) 'File rep ->
-      (Error rep -> m ()) ->
+      (Error -> m ()) ->
       (Handle -> m a) ->
       m (These (NonEmpty (Either (InvalidRuntimeDir rep) (FileError rep))) a),
     withExecutableFile ::
       forall m a.
       (MonadIO m, MonadMask m) =>
-      Dir.PathComponent ->
+      rep ->
       Bool ->
       (Handle -> m a) ->
       ExceptT
         Dir.MaybeParentCreationFailure
         m
-        (Annotated () (Either (FileError Dir.PathComponent) a))
+        (Annotated () (Either (FileError rep) a))
   }
 
 type role Operations nominal
 
--- | This is the recommended interface with this library. You can call this
---   function once and then use the members throughout your program.
---
---  __NB__: `withExecutableFile` doesn’t use the program subdirectory.
---
--- >>> myprogram = subdirOperations "myprogram" $ pure [posix|/run/whatever/|]
-subdirOperations ::
-  -- | The program directory component. This is the subdirectory to restrict
-  --   everything to within each XDG base directory.
-  Dir.PathComponent ->
+bleedingOperations ::
+  forall rep.
+  (System.Rep rep, Ord rep) =>
   -- | A fallback directory to use for `withRuntimeFile` and `withRuntimeFileRO`
-  --   if `$XDG_RUNTIME_DIR` isn’t set. If this is `Nothing`, then
-  --   `$XDG_RUNTIME_DIR` being unset results in an error instead of a warning.
+  --   if @$XDG_RUNTIME_DIR@ isn’t set. If this is `Nothing`, then
+  --   @$XDG_RUNTIME_DIR@ being unset results in an error instead of a warning.
   --
   --       If @$XDG_RUNTIME_DIR@ is not set applications should fall back to a
   --       replacement directory with similar capabilities and print a warning
@@ -298,13 +307,51 @@ subdirOperations ::
   --
   --  __NB__: This directory should already be application-specific. The
   --          provided directory component won’t be appended to it.
-  Maybe (BaseDirectory Dir.PathComponent) ->
-  Operations Dir.PathComponent
+  Maybe (BaseDirectory rep) ->
+  Operations rep
+bleedingOperations runtimeFallback =
+  Operations
+    { withUserFile = XDG.withUserFile,
+      withUserFileRO = XDG.withUserFileRO,
+      withAggregateFiles = XDG.withAggregateFiles,
+      withTargetFile = XDG.withTargetFile,
+      withRuntimeFile = \filename mode ->
+        flip (XDG.withRuntimeFile filename mode) runtimeFallback,
+      withRuntimeFileRO = \filename ->
+        XDG.withRuntimeFileRO filename runtimeFallback,
+      withExecutableFile = XDG.withExecutableFile
+    }
+
+-- | This is the recommended interface with this library. You can call this
+--   function once and then use the members throughout your program.
+--
+--  __NB__: `withExecutableFile` doesn’t use the program subdirectory.
+--
+-- >>> myprogram = subdirOperations "myprogram" $ pure [posix|/run/whatever/|]
+subdirOperations ::
+  forall rep.
+  (System.Rep rep, Ord rep) =>
+  -- | The program directory component. This is the subdirectory to restrict
+  --   everything to within each XDG base directory.
+  rep ->
+  -- | A fallback directory to use for `withRuntimeFile` and `withRuntimeFileRO`
+  --   if @$XDG_RUNTIME_DIR@ isn’t set. If this is `Nothing`, then
+  --   @$XDG_RUNTIME_DIR@ being unset results in an error instead of a warning.
+  --
+  --       If @$XDG_RUNTIME_DIR@ is not set applications should fall back to a
+  --       replacement directory with similar capabilities and print a warning
+  --       message.
+  --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
+  --
+  --  __NB__: This directory should already be application-specific. The
+  --          provided directory component won’t be appended to it.
+  Maybe (BaseDirectory rep) ->
+  Operations rep
 subdirOperations subdir runtimeFallback =
   let injectSubdir ::
         forall k.
-        (Path ('Rel 'False) 'File Dir.PathComponent -> k) ->
-        Path ('Rel 'False) 'File Dir.PathComponent ->
+        (Path ('Rel 'False) 'File rep -> k) ->
+        Path ('Rel 'False) 'File rep ->
         k
       injectSubdir fn = fn . (Directory.descendTo Directory.current subdir </>)
    in Operations

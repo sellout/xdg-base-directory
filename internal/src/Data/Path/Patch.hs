@@ -1,4 +1,8 @@
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE Safe #-}
+{-# LANGUAGE TypeFamilyDependencies #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 -- |
 -- Copyright: 2024 Greg Pfeil
@@ -11,10 +15,12 @@ module Data.Path.Patch
     serialize,
     serializeAny,
     withFile,
+    createDirectoryWithParentsIfMissing,
+    doesDirectoryExist,
   )
 where
 
-import "base" Control.Applicative (pure)
+import "base" Control.Applicative (empty, pure)
 import "base" Control.Category ((.))
 import "base" Control.Monad.IO.Class (MonadIO)
 import "base" Data.Bool (Bool (False, True))
@@ -27,8 +33,9 @@ import "base" Data.Ord (Ord)
 import "base" Data.Proxy (Proxy (Proxy))
 import "base" Data.Semigroup ((<>))
 import "base" Numeric.Natural (Natural)
-import "base" System.IO (Handle, IOMode)
-import "exceptions" Control.Monad.Catch (MonadMask)
+import "base" System.IO (Handle, IO, IOMode)
+import qualified "base" System.IO.Error as IO
+import "exceptions" Control.Monad.Catch (MonadMask, tryJust)
 import "pathway" Data.Path (Type (Dir, File))
 import qualified "pathway" Data.Path as Path
 import qualified "pathway" Data.Path.Directory as Directory
@@ -43,10 +50,13 @@ import "pathway-internal" Data.Path.Internal
     filename,
     parents,
   )
+import qualified "pathway-system" Filesystem.Path as Dir
 import "strict" Data.Strict.Maybe (maybe)
+import "transformers" Control.Monad.Trans.Except (ExceptT (ExceptT))
 import "yaya" Yaya.Fold (cata, cata2, embed)
 import "yaya" Yaya.Fold.Common (takeAvailable)
 import qualified "this" XDG.BaseDirectory.Internal.System as System
+import "base" Prelude (error)
 
 type role AnchoredType nominal nominal
 
@@ -138,8 +148,13 @@ localFormat =
   let proxy = Proxy :: Proxy rep
    in Format
         { Format.root = System.pack . pure $ System.pathSeparator proxy,
-          Format.current = System.fromStringLiteral "",
-          Format.parent = System.fromStringLiteral "..",
+          Format.current = mempty,
+          -- TODO: Figure out how to implement this without needing IO. I need
+          --       to be able to create an `OsPath` literal for `".."`.
+          Format.parent =
+            error $
+              "Internal xdg-base-directory error: This library doesn’t "
+                <> "allow reparented paths, but one was encountered.",
           Format.separator = System.pack . pure $ System.pathSeparator proxy,
           Format.substitutions = mempty
         }
@@ -155,3 +170,23 @@ withFile ::
   (Handle -> m a) ->
   m a
 withFile = System.withFile . serialize localFormat
+
+createDirectoryWithParentsIfMissing ::
+  (System.Rep rep, Ord rep) =>
+  Path 'Path.Abs 'Dir rep ->
+  ExceptT Dir.MaybeParentCreationFailure IO ()
+createDirectoryWithParentsIfMissing =
+  ExceptT
+    . tryJust
+      ( \e ->
+          if
+            | IO.isFullError e -> pure Dir.FullError
+            | True -> empty
+      )
+    . System.createDirectoryIfMissing True
+    . serialize localFormat
+
+doesDirectoryExist ::
+  (System.Rep rep, Ord rep) => Path 'Path.Abs 'Dir rep -> IO Bool
+doesDirectoryExist =
+  System.doesDirectoryExist . serialize localFormat

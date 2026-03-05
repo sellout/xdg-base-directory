@@ -1,4 +1,6 @@
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE Trustworthy #-}
+{-# LANGUAGE TypeApplications #-}
 
 -- |
 -- Copyright: 2024 Greg Pfeil
@@ -41,19 +43,23 @@ import "base" Control.Applicative (pure)
 import "base" Control.Category ((.))
 import "base" Control.Monad ((=<<))
 import "base" Data.Bool (Bool (False))
-import "base" Data.Either (Either (Left, Right), either)
+import "base" Data.Either (Either (Left), either)
 import "base" Data.Eq (Eq, (==))
-import "base" Data.Function (($))
+import "base" Data.Function (const, ($))
 import "base" Data.Functor ((<$>))
 import "base" Data.Maybe (maybe)
 import "base" Data.String (String)
 import "base" Data.Traversable (traverse)
 import "base" GHC.Generics (Generic)
-import qualified "base" System.IO as IO
+import "base" System.IO (IO)
 import "base" Text.Show (Show)
 import qualified "containers" Data.Map.Strict as Map
-import "pathway" Data.Path (Path, Relativity (Abs, Rel), Type (Dir), (</>))
-import qualified "pathway" Data.Path.Directory as Directory
+import qualified "megaparsec" Text.Megaparsec as MP
+import "pathway" Data.Path (Path, Relativity (Abs, Rel), Type (Dir), anchor, (</>))
+import qualified "pathway" Data.Path as Path
+import qualified "pathway" Data.Path.Format as Format
+import qualified "pathway" Data.Path.Parser as Parser
+import "pathway" Data.Path.TH (posix)
 import "xdg-base-directory" XDG.BaseDirectory.Internal
   ( Error (RelativeDirectory),
     getHomeDirectory,
@@ -87,6 +93,8 @@ data LookupError
     HomeDirectoryError BaseDir.Error
   | -- | A path error occurred (e.g., relative path where absolute expected).
     PathError BaseDir.Error
+  | InvalidPath (MP.ParseErrorBundle String String)
+  | NotRelativeDir
   deriving stock (Eq, Generic, Show)
 
 -- | Look up a user directory.
@@ -100,9 +108,7 @@ data LookupError
 --   - 'desktop' falls back to @$HOME/Desktop@
 --   - All other directories fall back to @$HOME@
 getUserDirectory ::
-  (System.Rep rep) =>
-  UserDirectory ->
-  IO.IO (Either LookupError (Path 'Abs 'Dir rep))
+  UserDirectory -> IO (Either LookupError (Path 'Abs 'Dir String))
 getUserDirectory dir =
   either
     (fallback dir . pure . Left . ConfigLoadError)
@@ -118,8 +124,7 @@ getUserDirectory dir =
 --   Returns a map of all user directories to their resolved paths. Directories
 --   that are not configured or failed to resolve are omitted.
 getAllUserDirectories ::
-  (System.Rep rep) =>
-  IO.IO (Map.Map UserDirectory (Either LookupError (Path 'Abs 'Dir rep)))
+  IO (Map.Map UserDirectory (Either LookupError (Path 'Abs 'Dir String)))
 getAllUserDirectories =
   either
     ( \err ->
@@ -141,23 +146,19 @@ getAllUserDirectories =
 
 -- | Resolve a directory value to an absolute path.
 resolveDirectoryValue ::
-  (System.Rep rep) =>
-  DirectoryValue ->
-  IO.IO (Either LookupError (Path 'Abs 'Dir rep))
-resolveDirectoryValue value = case value of
-  HomeRelative relPath -> do
-    homeResult <- getHomeDirectory
-    case homeResult of
-      Left err -> pure . Left $ PathError err
-      Right home -> do
-        -- Parse the relative path and combine with home
-        relDir <- parseRelativeDir relPath
-        pure $ Right $ home </> relDir
+  DirectoryValue -> IO (Either LookupError (Path 'Abs 'Dir String))
+resolveDirectoryValue = \case
+  HomeRelative relPath ->
+    either
+      (Left . PathError)
+      -- Parse the relative path and combine with home
+      (\home -> (home </>) <$> parseRelativeDir relPath)
+      <$> getHomeDirectory
   Absolute absPath -> do
     rep <- System.fromStringLiteral absPath
     let parsed = Patch.parseDirectory rep
     case Patch.anchorType parsed of
-      Patch.Abs abs -> pure $ Right abs
+      Patch.Abs abs -> pure $ pure abs
       Patch.Rel _ -> pure . Left $ PathError RelativeDirectory
       Patch.Reparented _ -> pure . Left $ PathError RelativeDirectory
 
@@ -165,24 +166,18 @@ resolveDirectoryValue value = case value of
 --
 --   This uses 'Directory.descendTo' to build the path component by component.
 parseRelativeDir ::
-  (System.Rep rep) =>
-  String ->
-  IO.IO (Path ('Rel 'False) 'Dir rep)
-parseRelativeDir relPath = do
-  rep <- System.fromStringLiteral relPath
-  let components = System.splitDirectories rep
-  -- Build the relative path by descending through each component
-  buildRelativeDir components
-
--- | Build a relative directory path from a list of components.
-buildRelativeDir ::
-  [rep] ->
-  IO.IO (Path ('Rel 'False) 'Dir rep)
-buildRelativeDir components =
-  pure $ foldComponents Directory.current components
-  where
-    foldComponents base [] = base
-    foldComponents base (c : cs) = foldComponents (Directory.descendTo base c) cs
+  String -> Either LookupError (Path ('Rel 'False) 'Dir String)
+parseRelativeDir relPath =
+  either
+    (Left . InvalidPath)
+    ( ( \case
+          Path.RelDir rd -> pure rd
+          _ -> Left NotRelativeDir
+      )
+        . anchor
+        . Path.forgetType
+    )
+    $ MP.parse (Parser.directory Format.posix) relPath ""
 
 -- | Fallback for unconfigured directories.
 --
@@ -192,15 +187,16 @@ buildRelativeDir components =
 fallback ::
   (System.Rep rep) =>
   UserDirectory ->
-  IO.IO (Either LookupError (Path 'Abs 'Dir rep)) ->
-  IO.IO (Either LookupError (Path 'Abs 'Dir rep))
-fallback dir onError = do
-  homeResult <- getHomeDirectory
-  case homeResult of
-    Left _ -> onError
-    Right home ->
-      if dir == desktop
-        then do
-          desktopDir <- parseRelativeDir "Desktop"
-          pure $ Right $ home </> desktopDir
-        else pure $ Right home
+  IO (Either LookupError (Path 'Abs 'Dir rep)) ->
+  IO (Either LookupError (Path 'Abs 'Dir rep))
+fallback dir onError =
+  either
+    (const onError)
+    ( \home ->
+        if dir == desktop
+          then
+            pure . (home </>)
+              <$> traverse System.fromStringLiteral [posix|Desktop/|]
+          else pure $ pure home
+    )
+    =<< getHomeDirectory

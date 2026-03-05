@@ -17,21 +17,22 @@ module XDG.UserDirectory.Update
 where
 
 import "base" Control.Applicative (pure)
-import "base" Data.Traversable (mapM)
-import "base" Data.Either (Either (Left, Right))
+import "base" Control.Category ((.))
+import "base" Control.Monad ((<=<))
+import "base" Data.Bifunctor (bimap)
+import "base" Data.Either (Either (Left), either)
 import "base" Data.Eq (Eq)
-import "base" Data.Function (($))
 import "base" Data.Functor ((<$>))
-import "base" Data.Ord (Ord)
+import "base" Data.String (String)
+import "base" Data.Traversable (traverse)
 import "base" GHC.Generics (Generic)
-import qualified "base" System.IO as IO
+import "base" System.IO (IO)
 import "base" Text.Show (Show)
 import qualified "containers" Data.Map.Strict as Map
 import "pathway" Data.Path (Path, Relativity (Abs), Type (Dir))
 import qualified "pathway-system" Filesystem.Path as Dir
 import "transformers" Control.Monad.Trans.Except (runExceptT)
 import qualified "xdg-base-directory-internal" Data.Path.Patch as Patch
-import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
 import qualified "this" XDG.UserDirectory as UD
 import "this" XDG.UserDirectory.Type
   ( UserDirectory,
@@ -51,25 +52,21 @@ data UpdateError
 --   Returns the path to the directory on success. If the directory could not
 --   be looked up or created, returns an error.
 ensureUserDirectory ::
-  (System.Rep rep, Ord rep) =>
-  UserDirectory ->
-  IO.IO (Either UpdateError (Path 'Abs 'Dir rep))
-ensureUserDirectory dir = do
-  pathResult <- UD.getUserDirectory dir
-  case pathResult of
-    Left err -> pure $ Left $ LookupError err
-    Right path -> do
-      createResult <- runExceptT $ Patch.createDirectoryWithParentsIfMissing path
-      case createResult of
-        Left err -> pure $ Left $ CreationError err
-        Right () -> pure $ Right path
+  UserDirectory -> IO (Either UpdateError (Path 'Abs 'Dir String))
+ensureUserDirectory =
+  either
+    (pure . Left . LookupError)
+    ( \path ->
+        bimap CreationError (\() -> path)
+          <$> runExceptT (Patch.createDirectoryWithParentsIfMissing path)
+    )
+    <=< UD.getUserDirectory
 
 -- | Ensure all well-known user directories exist, creating them if necessary.
 --
 --   Returns a map of all user directories to their resolved paths or errors.
 ensureAllUserDirectories ::
-  (System.Rep rep, Ord rep) =>
-  IO.IO (Map.Map UserDirectory (Either UpdateError (Path 'Abs 'Dir rep)))
-ensureAllUserDirectories = do
-  results <- mapM (\d -> (,) d <$> ensureUserDirectory d) wellKnownDirectories
-  pure $ Map.fromList results
+  IO (Map.Map UserDirectory (Either UpdateError (Path 'Abs 'Dir String)))
+ensureAllUserDirectories =
+  Map.fromList
+    <$> traverse (\d -> (d,) <$> ensureUserDirectory d) wellKnownDirectories

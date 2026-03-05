@@ -9,6 +9,7 @@
 -- Configuration loading from @$XDG_CONFIG_HOME/user-dirs.dirs@.
 module XDG.UserDirectory.Config
   ( loadConfig,
+    writeConfigTo,
     ConfigError (..),
   )
 where
@@ -39,6 +40,7 @@ import "this" XDG.UserDirectory.Parser
   ( ParseError,
     UserDirsConfig,
     parseUserDirs,
+    serializeUserDirs,
   )
 
 -- | Errors that can occur when loading the configuration.
@@ -74,3 +76,10 @@ loadConfig =
   where
     theseToEither :: These (NonEmpty a) b -> Either (NonEmpty a) b
     theseToEither = these Left pure $ const pure
+
+-- | Write a user directories configuration to a file path.
+--
+--   This is useful for testing with @--dummy-output@ or for updating the
+--   actual config file.
+writeConfigTo :: String -> UserDirsConfig -> IO.IO ()
+writeConfigTo path config = TIO.writeFile path (serializeUserDirs config)

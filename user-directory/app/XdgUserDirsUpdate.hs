@@ -18,6 +18,7 @@
 --   --set NAME PATH      Set a specific directory
 module Main (main) where
 
+import "base" Control.Applicative (pure)
 import "base" Control.Category ((.))
 import "base" Control.Monad ((=<<))
 import "base" Data.Bool (Bool (False, True))
@@ -25,7 +26,7 @@ import "base" Data.Either (Either (Left, Right), either)
 import "base" Data.Foldable (fold)
 import "base" Data.Function (const, ($))
 import "base" Data.Functor (fmap, (<$>))
-import "base" Data.Maybe (Maybe (Just, Nothing))
+import "base" Data.Maybe (Maybe (Just, Nothing), maybe)
 import "base" Data.Semigroup ((<>))
 import "base" Data.String (String)
 import "base" Data.Traversable (traverse)
@@ -38,6 +39,10 @@ import qualified "containers" Data.Map.Strict as Map
 import "pathway" Data.Path (Path, Relativity (Abs), Type (Dir))
 import qualified "pathway" Data.Path.Format as Format
 import "xdg-base-directory-internal" Data.Path.Patch (serialize)
+import "xdg-user-directory" XDG.UserDirectory.Config
+  ( loadConfig,
+    writeConfigTo,
+  )
 import "xdg-user-directory" XDG.UserDirectory.Type
   ( UserDirectory (UserDirectory),
   )
@@ -83,11 +88,12 @@ parseArgs = go defaultOptions
 
 -- | Display help message.
 showHelp :: IO ()
-showHelp =
+showHelp = do
+  progName <- Env.getProgName
   fold
     <$> traverse
       IO.putStrLn
-      [ "Usage: xdg-user-dirs-update [OPTIONS]",
+      [ "Usage: " <> progName <> " [OPTIONS]",
         "",
         "Update XDG user directories configuration.",
         "",
@@ -112,8 +118,13 @@ main :: IO ()
 main =
   either
     ( \err -> do
-        IO.hPutStrLn IO.stderr $ "Error: " <> err
-        IO.hPutStrLn IO.stderr "Try 'xdg-user-dirs-update --help' for more information."
+        progName <- Env.getProgName
+        fold
+          <$> traverse
+            (IO.hPutStrLn IO.stderr)
+            [ "Error: " <> err,
+              "Try ‘" <> progName <> " --help’ for more information."
+            ]
         Exit.exitFailure
     )
     ( \opts ->
@@ -123,11 +134,33 @@ main =
               -- --set is not yet implemented in the library
               IO.hPutStrLn IO.stderr $
                 "Setting " <> name <> " to " <> path <> " (not yet implemented)"
-          | True -> do
-              IO.putStrLn "Ensuring user directories exist..."
-              fmap fold . traverse (uncurry showResult) . Map.toList
-                =<< ensureAllUserDirectories
-              IO.putStrLn "Done."
+          | True ->
+              either
+                ( const do
+                    IO.hPutStrLn IO.stderr "Warning: Could not load config file"
+                    -- Continue with directory creation anyway
+                    ensure $ pure ()
+                )
+                ( \config ->
+                    ensure
+                      -- Write config to dummy output if specified
+                      . maybe
+                        (pure ())
+                        ( \path -> do
+                            IO.putStrLn $ "Writing config to: " <> path
+                            writeConfigTo path config
+                        )
+                      $ dummyOutput opts
+                )
+                =<< loadConfig
     )
     . parseArgs
     =<< Env.getArgs
+  where
+    ensure :: IO () -> IO ()
+    ensure action = do
+      IO.putStrLn "Ensuring user directories exist..."
+      fmap fold . traverse (uncurry showResult) . Map.toList
+        =<< ensureAllUserDirectories
+      action
+      IO.putStrLn "Done."

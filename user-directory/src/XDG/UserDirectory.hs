@@ -167,7 +167,7 @@ resolveDirectoryValue = \case
 --   This uses 'Directory.descendTo' to build the path component by component.
 parseRelativeDir ::
   String -> Either LookupError (Path ('Rel 'False) 'Dir String)
-parseRelativeDir relPath =
+parseRelativeDir =
   either
     (Left . InvalidPath)
     ( ( \case
@@ -177,7 +177,7 @@ parseRelativeDir relPath =
         . anchor
         . Path.forgetType
     )
-    $ MP.parse (Parser.directory Format.posix) relPath ""
+    . MP.parse (Parser.directory Format.posix) ""
 
 -- | Fallback for unconfigured directories.
 --

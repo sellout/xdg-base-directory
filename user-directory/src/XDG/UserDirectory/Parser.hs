@@ -23,6 +23,10 @@ module XDG.UserDirectory.Parser
     parseUserDirs,
     ParseError,
 
+    -- * Serialization
+    serializeUserDirs,
+    serializeDirectoryValue,
+
     -- * Types
     DirectoryValue (..),
     UserDirsConfig,
@@ -37,10 +41,13 @@ import "base" Data.Char (Char)
 import "base" Data.Either (Either)
 import "base" Data.Eq (Eq, (/=))
 import "base" Data.Function (($))
+import "base" Data.Foldable (concatMap)
 import "base" Data.Functor ((<$), (<$>))
+import "base" Data.List (unlines)
 import qualified "base" Data.Kind as Kind
 import "base" Data.Maybe (Maybe (Just, Nothing), catMaybes)
 import "base" Data.Ord (Ord)
+import "base" Data.Semigroup ((<>))
 import "base" Data.String (String)
 import "base" GHC.Generics (Generic)
 import "base" Text.Show (Show)
@@ -146,3 +153,36 @@ parseUserDirs =
         <* eof
     )
     "user-dirs.dirs"
+
+-- | Serialize a directory value to its config file representation.
+--
+--   Examples:
+--
+--   - @HomeRelative "Desktop"@ becomes @\"$HOME/Desktop\"@
+--   - @Absolute "/tmp/test"@ becomes @\"/tmp/test\"@
+serializeDirectoryValue :: DirectoryValue -> String
+serializeDirectoryValue = \case
+  HomeRelative path -> "\"$HOME/" <> escapeString path <> "\""
+  Absolute path -> "\"" <> escapeString path <> "\""
+
+-- | Escape special characters in a string for the config file format.
+escapeString :: String -> String
+escapeString = concatMap escapeChar'
+  where
+    escapeChar' '\\' = "\\\\"
+    escapeChar' '"' = "\\\""
+    escapeChar' '$' = "\\$"
+    escapeChar' c = [c]
+
+-- | Serialize a user directories config to the file format.
+--
+--   Produces output like:
+--
+--   > XDG_DESKTOP_DIR="$HOME/Desktop"
+--   > XDG_DOWNLOAD_DIR="$HOME/Downloads"
+serializeUserDirs :: UserDirsConfig -> T.Text
+serializeUserDirs config =
+  T.pack $ unlines $ serializeLine <$> Map.toList config
+  where
+    serializeLine (UserDirectory name, value) =
+      "XDG_" <> name <> "_DIR=" <> serializeDirectoryValue value

@@ -168,9 +168,9 @@ data Aggregate = Config | Data
   deriving stock (Eq, Generic, Ord, Read, Show)
 
 consAggregate' ::
-  Either e (BaseDirectory rep) ->
-  Annotated (NonEmpty e) (NonEmpty (BaseDirectory rep)) ->
-  Annotated (NonEmpty e) (NonEmpty (BaseDirectory rep))
+  Either e a ->
+  Annotated (NonEmpty e) (NonEmpty a) ->
+  Annotated (NonEmpty e) (NonEmpty a)
 consAggregate' =
   either
     (\e -> annotated (Noted $ pure e) $ Noted . NonEmpty.cons e)
@@ -179,9 +179,9 @@ consAggregate' =
     )
 
 consAggregate ::
-  These (NonEmpty e) (BaseDirectory rep) ->
-  Annotated (NonEmpty e) (NonEmpty (BaseDirectory rep)) ->
-  Annotated (NonEmpty e) (NonEmpty (BaseDirectory rep))
+  These (NonEmpty e) a ->
+  Annotated (NonEmpty e) (NonEmpty a) ->
+  Annotated (NonEmpty e) (NonEmpty a)
 consAggregate = \case
   This es -> annotated (Noted es) (Noted . (es <>))
   That a ->

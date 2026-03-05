@@ -18,18 +18,17 @@
 --   --set NAME PATH      Set a specific directory
 module Main (main) where
 
-import "base" Control.Applicative (pure)
+import "base" Control.Applicative (Applicative, liftA2, pure)
 import "base" Control.Category ((.))
 import "base" Control.Monad ((=<<))
 import "base" Data.Bool (Bool (False, True))
 import "base" Data.Either (Either (Left, Right), either)
-import "base" Data.Foldable (fold)
-import "base" Data.Function (const, ($))
-import "base" Data.Functor (fmap, (<$>))
+import "base" Data.Foldable (Foldable, foldr)
+import "base" Data.Function (const, id, ($))
 import "base" Data.Maybe (Maybe (Just, Nothing), maybe)
+import "base" Data.Monoid (Monoid, mempty)
 import "base" Data.Semigroup ((<>))
 import "base" Data.String (String)
-import "base" Data.Traversable (traverse)
 import "base" Data.Tuple (uncurry)
 import qualified "base" System.Environment as Env
 import qualified "base" System.Exit as Exit
@@ -43,6 +42,10 @@ import "xdg-user-directory" XDG.UserDirectory.Config
   ( loadConfig,
     writeConfigTo,
   )
+import "xdg-user-directory" XDG.UserDirectory.Parser
+  ( parsePathToDirectoryValue,
+    setDirectory,
+  )
 import "xdg-user-directory" XDG.UserDirectory.Type
   ( UserDirectory (UserDirectory),
   )
@@ -50,6 +53,16 @@ import "xdg-user-directory" XDG.UserDirectory.Update
   ( UpdateError,
     ensureAllUserDirectories,
   )
+
+-- | Like `foldMap`, but for `traverse`.
+--
+--  __NB__: This is a safer alternative to `traverse_`. `traverse_` can throw
+--          away arbitrary values, but it’s often used to discard values like @t
+--          ()@. This can still be used in the @t ()@ case, but won’t work to
+--          discard non-unit structures.
+foldTraverse ::
+  (Applicative f, Foldable t, Monoid b) => (a -> f b) -> t a -> f b
+foldTraverse f = foldr (liftA2 (<>) . f) $ pure mempty
 
 -- | Command-line options.
 data Options = Options
@@ -90,19 +103,18 @@ parseArgs = go defaultOptions
 showHelp :: IO ()
 showHelp = do
   progName <- Env.getProgName
-  fold
-    <$> traverse
-      IO.putStrLn
-      [ "Usage: " <> progName <> " [OPTIONS]",
-        "",
-        "Update XDG user directories configuration.",
-        "",
-        "Options:",
-        "  --help               Display this help and exit",
-        "  --force              Force update even if directories already exist",
-        "  --dummy-output PATH  Write results to PATH instead of config file",
-        "  --set NAME PATH      Set a specific directory"
-      ]
+  foldTraverse
+    IO.putStrLn
+    [ "Usage: " <> progName <> " [OPTIONS]",
+      "",
+      "Update XDG user directories configuration.",
+      "",
+      "Options:",
+      "  --help               Display this help and exit",
+      "  --force              Force update even if directories already exist",
+      "  --dummy-output PATH  Write results to PATH instead of config file",
+      "  --set NAME PATH      Set a specific directory"
+    ]
 
 -- | Show update result for a directory.
 showResult ::
@@ -119,21 +131,36 @@ main =
   either
     ( \err -> do
         progName <- Env.getProgName
-        fold
-          <$> traverse
-            (IO.hPutStrLn IO.stderr)
-            [ "Error: " <> err,
-              "Try ‘" <> progName <> " --help’ for more information."
-            ]
+        foldTraverse
+          (IO.hPutStrLn IO.stderr)
+          [ "Error: " <> err,
+            "Try ‘" <> progName <> " --help’ for more information."
+          ]
         Exit.exitFailure
     )
     ( \opts ->
         if
           | help opts -> showHelp
           | Just (name, path) <- set opts -> do
-              -- --set is not yet implemented in the library
-              IO.hPutStrLn IO.stderr $
-                "Setting " <> name <> " to " <> path <> " (not yet implemented)"
+              -- Load existing config or start with empty
+              configResult <- loadConfig
+              let baseConfig = either (const Map.empty) id configResult
+                  dirValue = parsePathToDirectoryValue path
+                  newConfig = setDirectory (UserDirectory name) dirValue baseConfig
+              -- Write to dummy output or warn if no output specified
+              maybe
+                ( foldTraverse
+                    (IO.hPutStrLn IO.stderr)
+                    [ "Warning: --set without --dummy-output would modify the real config.",
+                      "Use --dummy-output to specify where to write the config."
+                    ]
+                )
+                ( \outPath -> do
+                    IO.putStrLn $ "Setting " <> name <> " to " <> path
+                    writeConfigTo outPath newConfig
+                    IO.putStrLn $ "Config written to: " <> outPath
+                )
+                $ dummyOutput opts
           | True ->
               either
                 ( const do
@@ -160,7 +187,7 @@ main =
     ensure :: IO () -> IO ()
     ensure action = do
       IO.putStrLn "Ensuring user directories exist..."
-      fmap fold . traverse (uncurry showResult) . Map.toList
+      foldTraverse (uncurry showResult) . Map.toList
         =<< ensureAllUserDirectories
       action
       IO.putStrLn "Done."

@@ -21,11 +21,15 @@
 module XDG.UserDirectory.Parser
   ( -- * Parsing
     parseUserDirs,
+    parsePathToDirectoryValue,
     ParseError,
 
     -- * Serialization
     serializeUserDirs,
     serializeDirectoryValue,
+
+    -- * Config manipulation
+    setDirectory,
 
     -- * Types
     DirectoryValue (..),
@@ -36,14 +40,14 @@ where
 import "base" Control.Applicative (pure, (*>), (<*), (<|>))
 import "base" Control.Category ((.))
 import "base" Control.Monad (void)
-import "base" Data.Bool ((&&))
+import "base" Data.Bool (otherwise, (&&))
 import "base" Data.Char (Char)
 import "base" Data.Either (Either)
 import "base" Data.Eq (Eq, (/=))
 import "base" Data.Function (($))
 import "base" Data.Foldable (concatMap)
 import "base" Data.Functor ((<$), (<$>))
-import "base" Data.List (unlines)
+import "base" Data.List (drop, isPrefixOf, length, unlines)
 import qualified "base" Data.Kind as Kind
 import "base" Data.Maybe (Maybe (Just, Nothing), catMaybes)
 import "base" Data.Ord (Ord)
@@ -186,3 +190,27 @@ serializeUserDirs config =
   where
     serializeLine (UserDirectory name, value) =
       "XDG_" <> name <> "_DIR=" <> serializeDirectoryValue value
+
+-- | Parse a command-line path argument into a DirectoryValue.
+--
+--   Handles various path formats:
+--
+--   - @/absolute/path@ becomes @Absolute "/absolute/path"@
+--   - @$HOME/path@ becomes @HomeRelative "path"@
+--   - @~/path@ becomes @HomeRelative "path"@
+--   - @relative/path@ becomes @HomeRelative "relative/path"@
+parsePathToDirectoryValue :: String -> DirectoryValue
+parsePathToDirectoryValue path
+  | "/" `isPrefixOf` path = Absolute path
+  | "$HOME/" `isPrefixOf` path = HomeRelative (drop (length "$HOME/") path)
+  | "$HOME" `isPrefixOf` path = HomeRelative (drop (length "$HOME") path)
+  | "~/" `isPrefixOf` path = HomeRelative (drop (length "~/") path)
+  | "~" `isPrefixOf` path = HomeRelative (drop (length "~") path)
+  | otherwise = HomeRelative path
+
+-- | Set a directory in the config.
+--
+--   Updates the config with the specified directory value, adding it if
+--   it doesn't exist or replacing it if it does.
+setDirectory :: UserDirectory -> DirectoryValue -> UserDirsConfig -> UserDirsConfig
+setDirectory = Map.insert

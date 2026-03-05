@@ -268,3 +268,36 @@ test-suite doctests
     -- "Build_doctests.hs", we set it here, and that means it has to match
     -- doctests.hs, which is `Unsafe`.
     Unsafe
+
+test-suite xdg-user-dir-test
+  import: defaults
+  type: exitcode-stdio-1.0
+  hs-source-dirs:
+    tests
+  main-is: XdgUserDirTest.hs
+  build-depends:
+    filepath,
+    process,
+  build-tool-depends:
+    xdg-user-directory:xdg-user-dir,
+  ghc-options:
+    -Wno-missing-import-lists
+  default-extensions:
+    Unsafe
+
+test-suite xdg-user-dirs-update-test
+  import: defaults
+  type: exitcode-stdio-1.0
+  hs-source-dirs:
+    tests
+  main-is: XdgUserDirsUpdateTest.hs
+  build-depends:
+    directory,
+    filepath,
+    process,
+  build-tool-depends:
+    xdg-user-directory:xdg-user-dirs-update,
+  ghc-options:
+    -Wno-missing-import-lists
+  default-extensions:
+    Unsafe

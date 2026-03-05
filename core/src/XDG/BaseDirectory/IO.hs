@@ -425,6 +425,7 @@ withUserFileRO user filename action =
 --     Data
 --     [posix|myprogram/resources/splash.png|]
 --     pure
+-- :}
 -- This [ConstructionError (Var (...Var "XDG_DATA_HOME"...),ConstructionError (Var (...Var "XDG_DATA_DIRS"...),IOError .../home/example-user/.local/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory),IOError /usr/local/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory),IOError /usr/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory)]
 withAggregateFiles ::
   (MonadIO m, MonadMask m, System.Rep rep, Ord rep) =>

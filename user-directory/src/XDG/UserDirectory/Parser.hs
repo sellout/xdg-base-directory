@@ -129,8 +129,9 @@ parseLine = do
   pure $ (\ud -> (ud, value)) <$> mDir
 
 -- | Skip unknown lines (lines that don't parse as XDG user dirs).
+--   Requires at least one character to be skipped (won't match empty at EOF).
 skipLine :: Parser ()
-skipLine = void $ manyTill anySingle (void newline <|> eof)
+skipLine = void $ anySingle *> manyTill anySingle (void newline <|> eof)
 
 -- | Parse a line or skip it if it doesn't match.
 parseOrSkipLine :: Parser (Maybe (UserDirectory, DirectoryValue))

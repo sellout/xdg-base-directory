@@ -25,6 +25,7 @@ import "base" System.IO.Error (isDoesNotExistError)
 import "base" Text.Show (Show)
 import "pathway" Data.Path (Path, Relativity (Abs), Type (Dir), (</>))
 import qualified "pathway" Data.Path.Directory as Directory
+import qualified "text" Data.Text as T
 import qualified "text" Data.Text.IO as TIO
 import "these" Data.These (These, these)
 import qualified "xdg-base-directory" XDG.BaseDirectory as BaseDir
@@ -60,7 +61,12 @@ loadConfig = do
       result <-
         tryJust
           (\e -> if isDoesNotExistError e then pure () else empty)
-          (Patch.withFile configFile IO.ReadMode TIO.hGetContents)
+          -- Force the text to be fully read before the handle is closed
+          (Patch.withFile configFile IO.ReadMode (\h -> do
+            text <- TIO.hGetContents h
+            -- Force evaluation by computing the length
+            let !_ = T.length text
+            pure text))
       case result of
         Left () -> pure $ Left ConfigFileNotFound
         Right text ->

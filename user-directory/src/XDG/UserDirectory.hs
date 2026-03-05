@@ -39,14 +39,15 @@ where
 
 import "base" Control.Applicative (pure)
 import "base" Control.Category ((.))
+import "base" Control.Monad ((=<<))
 import "base" Data.Bool (Bool (False))
-import "base" Data.Either (Either (Left, Right))
+import "base" Data.Either (Either (Left, Right), either)
 import "base" Data.Eq (Eq, (==))
 import "base" Data.Function (($))
 import "base" Data.Functor ((<$>))
-import "base" Data.Maybe (Maybe (Just, Nothing))
+import "base" Data.Maybe (maybe)
 import "base" Data.String (String)
-import "base" Data.Traversable (mapM)
+import "base" Data.Traversable (traverse)
 import "base" GHC.Generics (Generic)
 import qualified "base" System.IO as IO
 import "base" Text.Show (Show)
@@ -102,14 +103,15 @@ getUserDirectory ::
   (System.Rep rep) =>
   UserDirectory ->
   IO.IO (Either LookupError (Path 'Abs 'Dir rep))
-getUserDirectory dir = do
-  configResult <- loadConfig
-  case configResult of
-    Left err -> fallback dir (pure . Left $ ConfigLoadError err)
-    Right config ->
-      case Map.lookup dir config of
-        Nothing -> fallback dir (pure $ Left $ DirectoryNotConfigured dir)
-        Just value -> resolveDirectoryValue value
+getUserDirectory dir =
+  either
+    (fallback dir . pure . Left . ConfigLoadError)
+    ( maybe
+        (fallback dir . pure . Left $ DirectoryNotConfigured dir)
+        resolveDirectoryValue
+        . Map.lookup dir
+    )
+    =<< loadConfig
 
 -- | Look up all configured user directories.
 --
@@ -118,16 +120,24 @@ getUserDirectory dir = do
 getAllUserDirectories ::
   (System.Rep rep) =>
   IO.IO (Map.Map UserDirectory (Either LookupError (Path 'Abs 'Dir rep)))
-getAllUserDirectories = do
-  configResult <- loadConfig
-  case configResult of
-    Left err -> pure $ Map.fromList [(d, Left $ ConfigLoadError err) | d <- wellKnownDirectories]
-    Right config -> do
-      let lookupDir d = case Map.lookup d config of
-            Nothing -> pure $ Left $ DirectoryNotConfigured d
-            Just value -> resolveDirectoryValue value
-      results <- mapM (\d -> (,) d <$> lookupDir d) wellKnownDirectories
-      pure $ Map.fromList results
+getAllUserDirectories =
+  either
+    ( \err ->
+        -- TODO: This case should return a single error, not an error for some
+        --       arbitrary set of directories.
+        pure . Map.fromList $
+          (,Left $ ConfigLoadError err) <$> wellKnownDirectories
+    )
+    ( \config ->
+        let lookupDir d =
+              maybe
+                (pure . Left $ DirectoryNotConfigured d)
+                resolveDirectoryValue
+                $ Map.lookup d config
+         in Map.fromList
+              <$> traverse (\d -> (,) d <$> lookupDir d) wellKnownDirectories
+    )
+    =<< loadConfig
 
 -- | Resolve a directory value to an absolute path.
 resolveDirectoryValue ::

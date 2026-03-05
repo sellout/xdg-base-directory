@@ -217,6 +217,27 @@ library
   other-modules:
     Paths_xdg_user_directory
 
+executable xdg-user-dir
+  import: defaults
+  hs-source-dirs:
+    app
+  main-is: XdgUserDir.hs
+  build-depends:
+    pathway,
+    xdg-base-directory-internal,
+    xdg-user-directory,
+
+executable xdg-user-dirs-update
+  import: defaults
+  hs-source-dirs:
+    app
+  main-is: XdgUserDirsUpdate.hs
+  build-depends:
+    containers,
+    pathway,
+    xdg-base-directory-internal,
+    xdg-user-directory,
+
 test-suite doctests
   import: defaults
   type: exitcode-stdio-1.0

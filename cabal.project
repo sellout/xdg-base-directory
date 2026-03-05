@@ -33,3 +33,4 @@ tests: True
 packages:
   ./core/xdg-base-directory.cabal
   ./internal/xdg-base-directory-internal.cabal
+  ./user-directory/xdg-user-directory.cabal

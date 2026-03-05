@@ -8,8 +8,8 @@
 module Main (main) where
 
 import "base" Control.Applicative (pure)
-import "base" Control.Monad (when)
-import "base" Data.Bool (Bool (False, True), not, otherwise, (&&))
+import "base" Control.Monad (unless)
+import "base" Data.Bool (Bool (False, True), otherwise, (&&))
 import "base" Data.Eq ((==))
 import "base" Data.Function (($))
 import "base" Data.Int (Int)
@@ -17,11 +17,12 @@ import "base" Data.List (isInfixOf)
 import "base" Data.Semigroup ((<>))
 import "base" Data.String (String)
 import "base" System.Environment (getExecutablePath)
-import "base" System.Exit (exitFailure)
+import "base" System.Exit (ExitCode (..), exitFailure)
 import "base" System.IO (IO)
 import qualified "base" System.IO as IO
 import "directory" System.Directory
   ( createDirectoryIfMissing,
+    getHomeDirectory,
     getTemporaryDirectory,
     removeDirectoryRecursive,
   )
@@ -45,9 +46,13 @@ runXdgUserDirsUpdate exe args = do
   (_, out, err) <- readProcessWithExitCode exe args ""
   pure (out, err)
 
+-- | Run xdg-user-dirs-update with given arguments and return exit code.
+runXdgUserDirsUpdateWithExit :: String -> [String] -> IO (ExitCode, String, String)
+runXdgUserDirsUpdateWithExit exe args = readProcessWithExitCode exe args ""
+
 -- | Assert a condition, failing with message if false.
 assert :: String -> Bool -> IO ()
-assert msg condition = when (not condition) do
+assert msg condition = unless condition do
   IO.hPutStrLn IO.stderr $ "FAIL: " <> msg
   exitFailure
 
@@ -68,7 +73,7 @@ readFileStrict path = do
 
 -- | Count occurrences of a substring in a string.
 countOccurrences :: String -> String -> Int
-countOccurrences needle haystack = go 0 haystack
+countOccurrences needle = go 0
   where
     needleLen = length needle
     go count [] = count
@@ -79,7 +84,7 @@ countOccurrences needle haystack = go 0 haystack
     length [] = 0
     length (_ : xs) = 1 + length xs
     isPrefixOf :: String -> String -> Bool
-    isPrefixOf [] _ = not False
+    isPrefixOf [] _ = True
     isPrefixOf _ [] = False
     isPrefixOf (x : xs) (y : ys) = x == y && isPrefixOf xs ys
     drop :: Int -> String -> String
@@ -87,6 +92,9 @@ countOccurrences needle haystack = go 0 haystack
     drop _ [] = []
     drop n (_ : xs) = drop (n - 1) xs
 
+-- | The test suite’s entry point.
+--
+-- @since 0.0.1.0
 main :: IO ()
 main = do
   IO.putStrLn "=== Testing xdg-user-dirs-update ==="
@@ -113,14 +121,13 @@ main = do
   assert "Config missing XDG_DESKTOP_DIR" $ "XDG_DESKTOP_DIR" `isInfixOf` contents1
   pass "Config file created with XDG_DESKTOP_DIR"
 
-  -- Test --set with relative path
-  IO.putStrLn "Test: --set with relative path"
+  -- Test --set with relative path (should fail)
+  IO.putStrLn "Test: --set with relative path should fail"
   let config2 = tempDir </> "config2.dirs"
-  _ <- runXdgUserDirsUpdate exe ["--set", "DESKTOP", "MyNewDesktop", "--dummy-output", config2]
-  contents2 <- readFileStrict config2
-  assert "DESKTOP not set to $HOME/MyNewDesktop" $
-    "XDG_DESKTOP_DIR=\"$HOME/MyNewDesktop\"" `isInfixOf` contents2
-  pass "DESKTOP set to $HOME/MyNewDesktop"
+  (exitCode2, _, err2) <- runXdgUserDirsUpdateWithExit exe ["--set", "DESKTOP", "MyNewDesktop", "--dummy-output", config2]
+  assert "Relative path should cause exit failure" $ exitCode2 == ExitFailure 1
+  assert "Error message should mention absolute path" $ "absolute" `isInfixOf` err2
+  pass "Relative path rejected with error"
 
   -- Test --set with absolute path
   IO.putStrLn "Test: --set with absolute path"
@@ -140,6 +147,16 @@ main = do
     "XDG_MUSIC_DIR=\"$HOME/MyMusic\"" `isInfixOf` contents4
   pass "MUSIC set to $HOME/MyMusic"
 
+  -- Test --set with home directory path (should convert to $HOME)
+  IO.putStrLn "Test: --set with home directory path converts to $HOME"
+  homeDir <- getHomeDirectory
+  let config5 = tempDir </> "config5.dirs"
+  _ <- runXdgUserDirsUpdate exe ["--set", "VIDEOS", homeDir </> "MyVideos", "--dummy-output", config5]
+  contents5 <- readFileStrict config5
+  assert "VIDEOS not converted to $HOME/MyVideos" $
+    "XDG_VIDEOS_DIR=\"$HOME/MyVideos\"" `isInfixOf` contents5
+  pass "Home directory path converted to $HOME/MyVideos"
+
   -- FIXME: Need to carefully test without `--dummy-output` by redirecting
   --        `$HOME.
   -- -- Test --set without --dummy-output shows warning
@@ -156,7 +173,7 @@ main = do
   -- Test that config preserves existing entries
   IO.putStrLn "Test: --set preserves existing entries"
   let config6 = tempDir </> "config6.dirs"
-  _ <- runXdgUserDirsUpdate exe ["--set", "NEWDIR", "TestDir", "--dummy-output", config6]
+  _ <- runXdgUserDirsUpdate exe ["--set", "NEWDIR", "$HOME/TestDir", "--dummy-output", config6]
   contents6 <- readFileStrict config6
   let desktopCount = countOccurrences "XDG_DESKTOP_DIR" contents6
       newdirCount = countOccurrences "XDG_NEWDIR_DIR" contents6

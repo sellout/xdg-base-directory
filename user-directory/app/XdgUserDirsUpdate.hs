@@ -1,6 +1,6 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE PatternGuards #-}
-{-# LANGUAGE Safe #-}
+{-# LANGUAGE Trustworthy #-}
 
 -- |
 -- Copyright: 2026 Greg Pfeil
@@ -21,10 +21,11 @@ module Main (main) where
 import "base" Control.Applicative (Applicative, liftA2, pure)
 import "base" Control.Category ((.))
 import "base" Control.Monad ((=<<))
-import "base" Data.Bool (Bool (False, True))
-import "base" Data.Either (Either (Left, Right), either)
+import "base" Data.Bool (Bool (False, True), (&&))
+import "base" Data.Either (Either (Left, Right), either, fromRight)
 import "base" Data.Foldable (Foldable, foldr)
-import "base" Data.Function (const, id, ($))
+import "base" Data.Function (const, ($))
+import "base" Data.List (drop, isPrefixOf, length)
 import "base" Data.Maybe (Maybe (Just, Nothing), maybe)
 import "base" Data.Monoid (Monoid, mempty)
 import "base" Data.Semigroup ((<>))
@@ -35,6 +36,7 @@ import qualified "base" System.Exit as Exit
 import "base" System.IO (IO)
 import qualified "base" System.IO as IO
 import qualified "containers" Data.Map.Strict as Map
+import "directory" System.Directory (getHomeDirectory)
 import "pathway" Data.Path (Path, Relativity (Abs), Type (Dir))
 import qualified "pathway" Data.Path.Format as Format
 import "xdg-base-directory-internal" Data.Path.Patch (serialize)
@@ -90,7 +92,7 @@ parseArgs = go defaultOptions
     go opts ("--force" : rest) = go opts {force = True} rest
     go opts ("--dummy-output" : path : rest) =
       go opts {dummyOutput = Just path} rest
-    go _ ("--dummy-output" : []) =
+    go _ ("--dummy-output" : _) =
       Left "--dummy-output requires a PATH argument"
     go opts ("--set" : name : path : rest) =
       go opts {set = Just (name, path)} rest
@@ -126,6 +128,9 @@ showResult (UserDirectory dir) =
     (const . IO.hPutStrLn IO.stderr $ "  " <> dir <> ": error")
     (IO.putStrLn . (("  " <> dir <> ": ") <>) . serialize Format.local)
 
+-- | The program’s entry point.
+--
+-- @since 0.0.1.0
 main :: IO ()
 main =
   either
@@ -142,25 +147,35 @@ main =
         if
           | help opts -> showHelp
           | Just (name, path) <- set opts -> do
-              -- Load existing config or start with empty
-              configResult <- loadConfig
-              let baseConfig = either (const Map.empty) id configResult
-                  dirValue = parsePathToDirectoryValue path
-                  newConfig = setDirectory (UserDirectory name) dirValue baseConfig
-              -- Write to dummy output or warn if no output specified
-              maybe
-                ( foldTraverse
-                    (IO.hPutStrLn IO.stderr)
-                    [ "Warning: --set without --dummy-output would modify the real config.",
-                      "Use --dummy-output to specify where to write the config."
-                    ]
-                )
-                ( \outPath -> do
-                    IO.putStrLn $ "Setting " <> name <> " to " <> path
-                    writeConfigTo outPath newConfig
-                    IO.putStrLn $ "Config written to: " <> outPath
-                )
-                $ dummyOutput opts
+              -- Get home directory and normalize path
+              homeDir <- getHomeDirectory
+              let normalizedPath =
+                    if ("/" `isPrefixOf` path) && (homeDir `isPrefixOf` path)
+                      then "$HOME" <> drop (length homeDir) path
+                      else path
+              case parsePathToDirectoryValue normalizedPath of
+                Nothing -> do
+                  IO.hPutStrLn IO.stderr "Error: PATH must be absolute"
+                  Exit.exitFailure
+                Just dirValue -> do
+                  -- Load existing config or start with empty
+                  configResult <- loadConfig
+                  let baseConfig = fromRight Map.empty configResult
+                      newConfig = setDirectory (UserDirectory name) dirValue baseConfig
+                  -- Write to dummy output or warn if no output specified
+                  maybe
+                    ( foldTraverse
+                        (IO.hPutStrLn IO.stderr)
+                        [ "Warning: --set without --dummy-output would modify the real config.",
+                          "Use --dummy-output to specify where to write the config."
+                        ]
+                    )
+                    ( \outPath -> do
+                        IO.putStrLn $ "Setting " <> name <> " to " <> path
+                        writeConfigTo outPath newConfig
+                        IO.putStrLn $ "Config written to: " <> outPath
+                    )
+                    $ dummyOutput opts
           | True ->
               either
                 ( const do
@@ -171,8 +186,7 @@ main =
                 ( \config ->
                     ensure
                       -- Write config to dummy output if specified
-                      . maybe
-                        (pure ())
+                      . foldTraverse
                         ( \path -> do
                             IO.putStrLn $ "Writing config to: " <> path
                             writeConfigTo path config

@@ -317,8 +317,7 @@ bleedingOperations runtimeFallback =
       withTargetFile = XDG.withTargetFile,
       withRuntimeFile = \filename mode ->
         flip (XDG.withRuntimeFile filename mode) runtimeFallback,
-      withRuntimeFileRO = \filename ->
-        XDG.withRuntimeFileRO filename runtimeFallback,
+      withRuntimeFileRO = (`XDG.withRuntimeFileRO` runtimeFallback),
       withExecutableFile = XDG.withExecutableFile
     }
 

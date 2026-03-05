@@ -22,7 +22,6 @@ import qualified "base" System.Environment as Env
 import "base" System.Exit (exitFailure)
 import "base" System.IO (IO)
 import qualified "base" System.IO as IO
-import "base" Text.Show (show)
 import qualified "pathway" Data.Path.Format as Format
 import "xdg-base-directory-internal" Data.Path.Patch (serialize)
 import "xdg-user-directory" XDG.UserDirectory (getUserDirectory)
@@ -30,13 +29,16 @@ import "xdg-user-directory" XDG.UserDirectory.Type
   ( UserDirectory (UserDirectory),
   )
 
+-- | The program’s entry point.
+--
+-- @since 0.0.1.0
 main :: IO ()
 main =
   ( \case
       [dir] ->
         either
           ( \err -> do
-              IO.putStrLn $ show err
+              IO.print err
               exitFailure
           )
           (IO.putStrLn . serialize Format.local)

@@ -35,18 +35,26 @@ import "comonad" Control.Comonad (Comonad, duplicate, extract)
 --   which gives it different semantics. It is useful when a value may be
 --   produced with warnings, with `NotBut` representing a clean result and
 --   `Noted` being annotated with warnings.
+--
+-- @since 0.0.1.0
 data Annotated (a :: Kind.Type) (b :: Kind.Type) = NotBut b | Noted a b
   deriving stock (Eq, Generic, Ord, Read, Show)
   deriving stock (Foldable, Functor, Generic1, Traversable)
 
 type role Annotated representational representational
 
+-- | Case analysis for 'Annotated'. The first function handles the unannotated
+--   case ('NotBut'), the second handles the annotated case ('Noted').
+--
+-- @since 0.0.1.0
 annotated :: (b -> c) -> (a -> b -> c) -> Annotated a b -> c
 annotated f g = \case
   NotBut b -> f b
   Noted a b -> g a b
 
 -- | A more general version of `<>` for `Annotated`.
+--
+-- @since 0.0.1.0
 combineAnnotated ::
   (a -> a -> a) ->
   (b -> c -> d) ->

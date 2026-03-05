@@ -44,11 +44,11 @@ import "base" Data.Bool (otherwise, (&&))
 import "base" Data.Char (Char)
 import "base" Data.Either (Either)
 import "base" Data.Eq (Eq, (/=))
-import "base" Data.Function (($))
 import "base" Data.Foldable (concatMap)
+import "base" Data.Function (($))
 import "base" Data.Functor ((<$), (<$>))
-import "base" Data.List (drop, isPrefixOf, length, unlines)
 import qualified "base" Data.Kind as Kind
+import "base" Data.List (drop, isPrefixOf, length, unlines)
 import "base" Data.Maybe (Maybe (Just, Nothing), catMaybes)
 import "base" Data.Ord (Ord)
 import "base" Data.Semigroup ((<>))
@@ -130,14 +130,14 @@ parseVarName = do
   _ <- chunk (T.pack "XDG_")
   name <- T.unpack <$> takeWhile1P Nothing (\c -> c /= '=' && c /= '_')
   _ <- chunk (T.pack "_DIR=")
-  pure $ Just $ UserDirectory name
+  pure . pure $ UserDirectory name
 
 -- | Parse a single assignment line.
 parseLine :: Parser (Maybe (UserDirectory, DirectoryValue))
 parseLine = do
   mDir <- parseVarName
   value <- parseValue
-  pure $ (\ud -> (ud, value)) <$> mDir
+  pure $ (,value) <$> mDir
 
 -- | Skip unknown lines (lines that don't parse as XDG user dirs).
 --   Requires at least one character to be skipped (won't match empty at EOF).
@@ -186,7 +186,7 @@ escapeString = concatMap escapeChar'
 --   > XDG_DOWNLOAD_DIR="$HOME/Downloads"
 serializeUserDirs :: UserDirsConfig -> T.Text
 serializeUserDirs config =
-  T.pack $ unlines $ serializeLine <$> Map.toList config
+  T.pack . unlines $ serializeLine <$> Map.toList config
   where
     serializeLine (UserDirectory name, value) =
       "XDG_" <> name <> "_DIR=" <> serializeDirectoryValue value
@@ -195,18 +195,18 @@ serializeUserDirs config =
 --
 --   Handles various path formats:
 --
---   - @/absolute/path@ becomes @Absolute "/absolute/path"@
---   - @$HOME/path@ becomes @HomeRelative "path"@
---   - @~/path@ becomes @HomeRelative "path"@
---   - @relative/path@ becomes @HomeRelative "relative/path"@
-parsePathToDirectoryValue :: String -> DirectoryValue
+--   - @/absolute/path@ becomes @Just (Absolute "/absolute/path")@
+--   - @$HOME/path@ becomes @Just (HomeRelative "path")@
+--   - @~/path@ becomes @Just (HomeRelative "path")@
+--   - @relative/path@ becomes @Nothing@ (rejected)
+parsePathToDirectoryValue :: String -> Maybe DirectoryValue
 parsePathToDirectoryValue path
-  | "/" `isPrefixOf` path = Absolute path
-  | "$HOME/" `isPrefixOf` path = HomeRelative (drop (length "$HOME/") path)
-  | "$HOME" `isPrefixOf` path = HomeRelative (drop (length "$HOME") path)
-  | "~/" `isPrefixOf` path = HomeRelative (drop (length "~/") path)
-  | "~" `isPrefixOf` path = HomeRelative (drop (length "~") path)
-  | otherwise = HomeRelative path
+  | "/" `isPrefixOf` path = Just (Absolute path)
+  | "$HOME/" `isPrefixOf` path = Just (HomeRelative (drop (length "$HOME/") path))
+  | "$HOME" `isPrefixOf` path = Just (HomeRelative (drop (length "$HOME") path))
+  | "~/" `isPrefixOf` path = Just (HomeRelative (drop (length "~/") path))
+  | "~" `isPrefixOf` path = Just (HomeRelative (drop (length "~") path))
+  | otherwise = Nothing
 
 -- | Set a directory in the config.
 --

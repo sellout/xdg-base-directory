@@ -191,6 +191,11 @@ common defaults
       no-recursion,
     ghc-options:
       -fplugin=NoRecursion
+    if impl(ghc >= 9.4)
+      build-depends:
+        henforcer ^>= {1.0.0},
+      ghc-options:
+        -fplugin Henforcer
 
 library
   import: defaults
@@ -234,6 +239,7 @@ executable xdg-user-dirs-update
   main-is: XdgUserDirsUpdate.hs
   build-depends:
     containers,
+    directory,
     pathway,
     xdg-base-directory-internal,
     xdg-user-directory,

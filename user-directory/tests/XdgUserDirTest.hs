@@ -8,7 +8,7 @@
 module Main (main) where
 
 import "base" Control.Applicative (pure)
-import "base" Control.Monad (when)
+import "base" Control.Monad (unless)
 import "base" Data.Bool (Bool, not, (||))
 import "base" Data.Foldable (null)
 import "base" Data.Function (($))
@@ -19,7 +19,7 @@ import "base" System.Environment (getExecutablePath)
 import "base" System.Exit (exitFailure)
 import "base" System.IO (IO)
 import qualified "base" System.IO as IO
-import "filepath" System.FilePath ((</>), takeDirectory)
+import "filepath" System.FilePath (takeDirectory, (</>))
 import "process" System.Process (readProcessWithExitCode)
 
 -- | Find the xdg-user-dir executable relative to this test executable.
@@ -40,7 +40,7 @@ runXdgUserDir exe args = do
 
 -- | Assert a condition, failing with message if false.
 assert :: String -> Bool -> IO ()
-assert msg condition = when (not condition) do
+assert msg condition = unless condition do
   IO.hPutStrLn IO.stderr $ "FAIL: " <> msg
   exitFailure
 
@@ -48,6 +48,9 @@ assert msg condition = when (not condition) do
 pass :: String -> IO ()
 pass msg = IO.putStrLn $ "PASS: " <> msg
 
+-- | The test suite’s entry point.
+--
+-- @since 0.0.1.0
 main :: IO ()
 main = do
   IO.putStrLn "=== Testing xdg-user-dir ==="

@@ -17,7 +17,7 @@ where
 import "base" Control.Applicative (empty, pure)
 import "base" Control.Category ((.))
 import "base" Control.Exception (tryJust)
-import "base" Control.Monad ((=<<))
+import "base" Control.Monad (unless, (=<<))
 import "base" Data.Bifunctor (first)
 import "base" Data.Either (Either (Left), either)
 import "base" Data.Eq (Eq)
@@ -44,6 +44,8 @@ import "this" XDG.UserDirectory.Parser
   )
 
 -- | Errors that can occur when loading the configuration.
+--
+-- @since 0.0.1.0
 data ConfigError
   = -- | Could not determine the config home directory.
     ConfigHomeError (NonEmpty Error)
@@ -54,6 +56,8 @@ data ConfigError
   deriving stock (Eq, Generic, Show)
 
 -- | Load the user directories configuration from @$XDG_CONFIG_HOME/user-dirs.dirs@.
+--
+-- @since 0.0.1.0
 loadConfig :: IO.IO (Either ConfigError UserDirsConfig)
 loadConfig =
   either
@@ -63,7 +67,7 @@ loadConfig =
           (\() -> Left ConfigFileNotFound)
           (first ParseFailed . parseUserDirs)
           <$> tryJust
-            (\e -> if isDoesNotExistError e then pure () else empty)
+            (\e -> unless (isDoesNotExistError e) empty)
             -- Force the text to be fully read before the handle is closed
             ( Patch.withFile @_ @String
                 (configHome </> [posix|user-dirs.dirs|])
@@ -81,5 +85,7 @@ loadConfig =
 --
 --   This is useful for testing with @--dummy-output@ or for updating the
 --   actual config file.
+--
+-- @since 0.0.1.0
 writeConfigTo :: String -> UserDirsConfig -> IO.IO ()
 writeConfigTo path config = TIO.writeFile path (serializeUserDirs config)

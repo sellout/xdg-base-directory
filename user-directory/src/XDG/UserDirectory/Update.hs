@@ -40,6 +40,8 @@ import "this" XDG.UserDirectory.Type
   )
 
 -- | Errors that can occur when updating user directories.
+--
+-- @since 0.0.1.0
 data UpdateError
   = -- | Could not look up the directory configuration.
     LookupError UD.LookupError
@@ -51,6 +53,8 @@ data UpdateError
 --
 --   Returns the path to the directory on success. If the directory could not
 --   be looked up or created, returns an error.
+--
+-- @since 0.0.1.0
 ensureUserDirectory ::
   UserDirectory -> IO (Either UpdateError (Path 'Abs 'Dir String))
 ensureUserDirectory =
@@ -65,6 +69,8 @@ ensureUserDirectory =
 -- | Ensure all well-known user directories exist, creating them if necessary.
 --
 --   Returns a map of all user directories to their resolved paths or errors.
+--
+-- @since 0.0.1.0
 ensureAllUserDirectories ::
   IO (Map.Map UserDirectory (Either UpdateError (Path 'Abs 'Dir String)))
 ensureAllUserDirectories =

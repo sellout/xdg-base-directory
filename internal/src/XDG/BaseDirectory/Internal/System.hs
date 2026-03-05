@@ -51,6 +51,8 @@ withFile' openFile filePath mode =
 
 -- | This wraps the underlying operations we use, so we can parameterize over
 --   string types.
+--
+-- @since 0.0.1.0
 class (Monoid a) => Rep (a :: Kind.Type) where
   type Char a
   createDirectoryIfMissing :: Bool -> a -> IO ()

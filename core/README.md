@@ -25,20 +25,19 @@ For particular use cases, you might need deeper access to things.
 
 For example, if you’re integrating this with a library that handles things differently on different platforms (like macOS and Windows), [`XDG.BaseDirectory.Custom`](./src/XDG.BaseDirectory/Custom.hs) provides only the values set in the environment, allowing you to use different defaults on different platforms.
 
-
 A number of modules expose roughly the same ten identifiers:
 
 |              | `BaseDirectory` | `.Var` | `.Default` | `.Default.Relative` | `.Custom` |
-|--------------|-----------------|--------|------------|---------------------|-----------|
-| `configHome` | ✔               | ✔      | ✔          | ✔                   | ✔         |
-| `stateHome`  | ✔               | ✔      | ✔          | ✔                   | ✔         |
-| `cacheHome`  | ✔               | ✔      | ✔          | ✔                   | ✔         |
-| `dataDirs`   | ✔               | ✔      | ✔          |                     | ✔         |
-| `configDirs` | ✔               | ✔      | ✔          |                     | ✔         |
-| `runtimeDir` | ✔               | ✔      |            |                     | ✔         |
-| `binHome`    | ✔               |        | ✔          | ✔                   |           |
-| `datadir`    | ✔               |        | ✔          |                     | ✔         |
-| `sysconfdir` | ✔               |        | ✔          |                     | ✔         |
+| ------------ | --------------- | ------ | ---------- | ------------------- | --------- |
+| `configHome` | ✔              | ✔     | ✔         | ✔                  | ✔        |
+| `stateHome`  | ✔              | ✔     | ✔         | ✔                  | ✔        |
+| `cacheHome`  | ✔              | ✔     | ✔         | ✔                  | ✔        |
+| `dataDirs`   | ✔              | ✔     | ✔         |                     | ✔        |
+| `configDirs` | ✔              | ✔     | ✔         |                     | ✔        |
+| `runtimeDir` | ✔              | ✔     |            |                     | ✔        |
+| `binHome`    | ✔              |        | ✔         | ✔                  |           |
+| `datadir`    | ✔              |        | ✔         |                     | ✔        |
+| `sysconfdir` | ✔              |        | ✔         |                     | ✔        |
 
 The first six of these correspond to the `XDG_*` variables defined by the XDG base directory specification. The other three are slightly different: `binHome` refers specifically to ‘.local/bin/’, which is defined in the spec, but doesn’t have a variable associated with it; and `datadir` & `sysconfdir` are GNU Make variables that are determined at _compile_ time (they’re referenced in the spec, but aren’t defined by it).
 

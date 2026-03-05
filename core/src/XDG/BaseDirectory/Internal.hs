@@ -37,19 +37,23 @@ import "these" Data.These (These (That, This))
 import qualified "xdg-base-directory-internal" Data.Path.Patch as Patch
 import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
 
--- |
+-- | Errors that can occur when reading an environment variable.
 --
 --  __NB__: This is lacking `Ord` and `Read` instances because `IOError` is
 --          missing them.
+--
+-- @since 0.0.1.0
 data VarError
   = MissingVar String (Maybe IOError)
   | EmptyVar String
   deriving stock (Eq, Generic, Show)
 
--- |
+-- | Errors that can occur when resolving a base directory.
 --
 --  __NB__: This is lacking `Ord` and `Read` instances because
 --          `Dir.InternalFailure` is missing them.
+--
+-- @since 0.0.1.0
 data Error
   = Var VarError
   | NoDirectoriesFound -- only for directory lists
@@ -57,10 +61,12 @@ data Error
   | Pathway (Dir.InternalFailure Dir.PathRep Void)
   deriving stock (Eq, Generic, Show)
 
--- |
+-- | An absolute directory path, as required by the XDG base directory spec.
 --
 --       All paths set in these environment variables must be absolute.
 --       —[§2](https://specifications.freedesktop.org/basedir-spec/latest/#basics)
+--
+-- @since 0.0.1.0
 type BaseDirectory = Path 'Abs 'Dir :: Kind.Type -> Kind.Type
 
 getAbs :: Patch.AnchoredType typ rep -> Maybe (Path 'Abs typ rep)
@@ -69,18 +75,29 @@ getAbs = \case
   Patch.Rel _ -> empty
   Patch.Reparented _ -> empty
 
+-- | Convert a 'Maybe' to an 'Either' using the provided error for 'Nothing'.
+--
+-- @since 0.0.1.0
 note :: e -> Maybe a -> Either e a
 note e = maybe (Left e) pure
 
+-- | Convert an 'Either' to a 'These', losing the ability to have both.
+--
+-- @since 0.0.1.0
 weakenEither :: Either a b -> These a b
 weakenEither = either This That
 
+-- | Extract an absolute path, returning an error if the path is relative.
+--
+-- @since 0.0.1.0
 extractAbs :: Path 'Any typ rep -> Either Error (Path 'Abs typ rep)
 extractAbs = note RelativeDirectory . getAbs . Patch.anchorType
 
--- |
+-- | Get the user's home directory as an absolute path.
 --
 --  __FIXME__: This should be coming from a Pathway lib.
+--
+-- @since 0.0.1.0
 getHomeDirectory :: (System.Rep rep) => IO (Either Error (Path 'Abs 'Dir rep))
 getHomeDirectory =
   (extractAbs . Patch.parseDirectory =<<)

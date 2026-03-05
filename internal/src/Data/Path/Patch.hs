@@ -60,11 +60,17 @@ import "base" Prelude (error)
 
 type role AnchoredType nominal nominal
 
+-- | A path with its relativity anchored to a specific type.
+--
+-- @since 0.0.1.0
 data AnchoredType (typ :: Type) (rep :: Kind.Type)
   = Abs (Path 'Rel.Abs typ rep)
   | Rel (Path ('Rel.Rel 'False) typ rep)
   | Reparented (Path ('Rel.Rel 'True) typ rep)
 
+-- | Determine the relativity of an 'Any' path.
+--
+-- @since 0.0.1.0
 anchorType :: Path 'Rel.Any typ rep -> AnchoredType typ rep
 anchorType path =
   maybe
@@ -93,11 +99,13 @@ anchorType path =
     )
     $ parents path
 
--- |
+-- | Parse a path string strictly.
 --
 --  __TODO__: Move this to pathway-system as an alternative to @MP.parse directory Format.local@.
 --
 --  __FIXME__: This currently does nothing about escape chars.
+--
+-- @since 0.0.1.0
 parseStrict :: (System.Rep rep) => rep -> Path 'Rel.Any 'Type.Any rep
 parseStrict path =
   let (dir, file) = System.splitFileName path
@@ -107,11 +115,13 @@ parseStrict path =
       )
         $ parseDirectory dir
 
--- |
+-- | Parse a directory path string.
 --
 --  __TODO__: Move this to pathway-system as an alternative to @MP.parse directory Format.local@.
 --
 --  __FIXME__: This currently does nothing about escape chars.
+--
+-- @since 0.0.1.0
 parseDirectory :: (System.Rep rep) => rep -> Path 'Rel.Any 'Dir rep
 parseDirectory path =
   let (drive, dir) = System.splitDrive path
@@ -127,6 +137,9 @@ parseDirectory path =
         . cata2 (embed . takeAvailable) (100 :: Natural)
         $ System.splitDirectories dir
 
+-- | Serialize any path to a string representation.
+--
+-- @since 0.0.1.0
 serializeAny :: (System.Rep a) => Format a -> Path.AnyPath a -> a
 serializeAny format path =
   let prefix =
@@ -139,6 +152,9 @@ serializeAny format path =
         (System.joinPath $ prefix <> reverse (toList $ directories path))
         $ filename path
 
+-- | Serialize a path to a string representation.
+--
+-- @since 0.0.1.0
 serialize ::
   (Path.Pathy rel typ, System.Rep a) => Format a -> Path rel typ a -> a
 serialize format = serializeAny format . Path.unanchor
@@ -159,9 +175,11 @@ localFormat =
           Format.substitutions = mempty
         }
 
--- |
+-- | Open a file for the given mode, performing an action with the handle.
 --
 --  __TODO__: Move this upstream.
+--
+-- @since 0.0.1.0
 withFile ::
   forall m rep a.
   (MonadIO m, MonadMask m, System.Rep rep, Ord rep) =>
@@ -171,6 +189,9 @@ withFile ::
   m a
 withFile = System.withFile . serialize localFormat
 
+-- | Create a directory and all missing parent directories.
+--
+-- @since 0.0.1.0
 createDirectoryWithParentsIfMissing ::
   (System.Rep rep, Ord rep) =>
   Path 'Path.Abs 'Dir rep ->
@@ -186,6 +207,9 @@ createDirectoryWithParentsIfMissing =
     . System.createDirectoryIfMissing True
     . serialize localFormat
 
+-- | Check whether a directory exists.
+--
+-- @since 0.0.1.0
 doesDirectoryExist ::
   (System.Rep rep, Ord rep) => Path 'Path.Abs 'Dir rep -> IO Bool
 doesDirectoryExist =

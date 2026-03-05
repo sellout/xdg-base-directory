@@ -1,5 +1,6 @@
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE PatternGuards #-}
-{-# LANGUAGE Unsafe #-}
+{-# LANGUAGE Safe #-}
 
 -- |
 -- Copyright: 2026 Greg Pfeil
@@ -17,20 +18,24 @@
 --   --set NAME PATH      Set a specific directory
 module Main (main) where
 
+import "base" Control.Category ((.))
+import "base" Control.Monad ((=<<))
 import "base" Data.Bool (Bool (False, True))
-import "base" Data.Either (Either (Left, Right))
-import "base" Data.Foldable (mapM_)
-import "base" Data.Function (($))
+import "base" Data.Either (Either (Left, Right), either)
+import "base" Data.Foldable (fold)
+import "base" Data.Function (const, ($))
+import "base" Data.Functor (fmap, (<$>))
 import "base" Data.Maybe (Maybe (Just, Nothing))
-import "base" Data.Monoid (mempty)
 import "base" Data.Semigroup ((<>))
 import "base" Data.String (String)
+import "base" Data.Traversable (traverse)
+import "base" Data.Tuple (uncurry)
 import qualified "base" System.Environment as Env
 import qualified "base" System.Exit as Exit
+import "base" System.IO (IO)
 import qualified "base" System.IO as IO
 import qualified "containers" Data.Map.Strict as Map
 import "pathway" Data.Path (Path, Relativity (Abs), Type (Dir))
-import "pathway" Data.Path.Format (Format (Format))
 import qualified "pathway" Data.Path.Format as Format
 import "xdg-base-directory-internal" Data.Path.Patch (serialize)
 import "xdg-user-directory" XDG.UserDirectory.Type
@@ -43,19 +48,19 @@ import "xdg-user-directory" XDG.UserDirectory.Update
 
 -- | Command-line options.
 data Options = Options
-  { optHelp :: Bool,
-    optForce :: Bool,
-    optDummyOutput :: Maybe String,
-    optSet :: Maybe (String, String)
+  { help :: Bool,
+    force :: Bool,
+    dummyOutput :: Maybe String,
+    set :: Maybe (String, String)
   }
 
 defaultOptions :: Options
 defaultOptions =
   Options
-    { optHelp = False,
-      optForce = False,
-      optDummyOutput = Nothing,
-      optSet = Nothing
+    { help = False,
+      force = False,
+      dummyOutput = Nothing,
+      set = Nothing
     }
 
 -- | Parse command-line arguments.
@@ -63,75 +68,66 @@ parseArgs :: [String] -> Either String Options
 parseArgs = go defaultOptions
   where
     go opts [] = Right opts
-    go opts ("--help" : rest) = go opts {optHelp = True} rest
-    go opts ("--force" : rest) = go opts {optForce = True} rest
+    go opts ("--help" : rest) = go opts {help = True} rest
+    go opts ("--force" : rest) = go opts {force = True} rest
     go opts ("--dummy-output" : path : rest) =
-      go opts {optDummyOutput = Just path} rest
+      go opts {dummyOutput = Just path} rest
     go _ ("--dummy-output" : []) =
       Left "--dummy-output requires a PATH argument"
     go opts ("--set" : name : path : rest) =
-      go opts {optSet = Just (name, path)} rest
+      go opts {set = Just (name, path)} rest
     go _ ("--set" : _) =
       Left "--set requires NAME and PATH arguments"
     go _ (arg : _) =
-      Left $ "Unknown option: " <> arg
+      Left $ "Invalid argument " <> arg
 
 -- | Display help message.
-showHelp :: IO.IO ()
-showHelp = do
-  IO.putStrLn "Usage: xdg-user-dirs-update [OPTIONS]"
-  IO.putStrLn ""
-  IO.putStrLn "Update XDG user directories configuration."
-  IO.putStrLn ""
-  IO.putStrLn "Options:"
-  IO.putStrLn "  --help               Display this help and exit"
-  IO.putStrLn "  --force              Force update even if directories already exist"
-  IO.putStrLn "  --dummy-output PATH  Write results to PATH instead of config file"
-  IO.putStrLn "  --set NAME PATH      Set a specific directory"
-  IO.putStrLn ""
-  IO.putStrLn "Directory names: DESKTOP, DOWNLOAD, TEMPLATES, PUBLICSHARE,"
-  IO.putStrLn "                 DOCUMENTS, MUSIC, PICTURES, VIDEOS"
-
--- | Local format for serializing paths.
-localFormat :: Format String
-localFormat =
-  Format
-    { Format.root = "/",
-      Format.current = "",
-      Format.parent = "..",
-      Format.separator = "/",
-      Format.substitutions = mempty
-    }
+showHelp :: IO ()
+showHelp =
+  fold
+    <$> traverse
+      IO.putStrLn
+      [ "Usage: xdg-user-dirs-update [OPTIONS]",
+        "",
+        "Update XDG user directories configuration.",
+        "",
+        "Options:",
+        "  --help               Display this help and exit",
+        "  --force              Force update even if directories already exist",
+        "  --dummy-output PATH  Write results to PATH instead of config file",
+        "  --set NAME PATH      Set a specific directory"
+      ]
 
 -- | Show update result for a directory.
 showResult ::
   UserDirectory ->
   Either UpdateError (Path 'Abs 'Dir String) ->
-  IO.IO ()
-showResult dir result = case result of
-  Left _ -> IO.hPutStrLn IO.stderr $ "  " <> showDir dir <> ": error"
-  Right path -> IO.putStrLn $ "  " <> showDir dir <> ": " <> serialize localFormat path
-  where
-    showDir (UserDirectory name) = name
+  IO ()
+showResult (UserDirectory dir) =
+  either
+    (const . IO.hPutStrLn IO.stderr $ "  " <> dir <> ": error")
+    (IO.putStrLn . (("  " <> dir <> ": ") <>) . serialize Format.local)
 
-main :: IO.IO ()
-main = do
-  args <- Env.getArgs
-  case parseArgs args of
-    Left err -> do
-      IO.hPutStrLn IO.stderr $ "Error: " <> err
-      IO.hPutStrLn IO.stderr "Try 'xdg-user-dirs-update --help' for more information."
-      Exit.exitFailure
-    Right opts
-      | optHelp opts -> showHelp
-      | Just (name, path) <- optSet opts -> do
-          -- --set is not yet implemented in the library
-          IO.hPutStrLn IO.stderr $
-            "Setting " <> name <> " to " <> path <> " (not yet implemented)"
-      | True -> do
-          IO.putStrLn "Ensuring user directories exist..."
-          results <- ensureAllUserDirectories
-          mapM_ showResultPair $ Map.toList results
-          IO.putStrLn "Done."
-  where
-    showResultPair (dir, result) = showResult dir result
+main :: IO ()
+main =
+  either
+    ( \err -> do
+        IO.hPutStrLn IO.stderr $ "Error: " <> err
+        IO.hPutStrLn IO.stderr "Try 'xdg-user-dirs-update --help' for more information."
+        Exit.exitFailure
+    )
+    ( \opts ->
+        if
+          | help opts -> showHelp
+          | Just (name, path) <- set opts -> do
+              -- --set is not yet implemented in the library
+              IO.hPutStrLn IO.stderr $
+                "Setting " <> name <> " to " <> path <> " (not yet implemented)"
+          | True -> do
+              IO.putStrLn "Ensuring user directories exist..."
+              fmap fold . traverse (uncurry showResult) . Map.toList
+                =<< ensureAllUserDirectories
+              IO.putStrLn "Done."
+    )
+    . parseArgs
+    =<< Env.getArgs

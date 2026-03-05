@@ -42,8 +42,7 @@
 
     pathway = {
       inputs.flaky.follows = "flaky";
-      ## NB: The revision here needs to match the one in ./cabal.project
-      url = "github:sellout/pathway/system-directories";
+      url = "github:sellout/pathway";
     };
   };
 }

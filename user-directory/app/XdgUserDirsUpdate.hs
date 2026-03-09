@@ -155,7 +155,7 @@ parseArgs = go defaultOptions
                   )
                     . Path.anchor
                 )
-                $ MP.parse (Parser.path @_ @Void Format.local) "" file
+                $ MP.parse (Parser.path @Void Format.local) "" file
           }
         rest
     go _ ("--dummy-output" : _) =
@@ -173,7 +173,7 @@ parseArgs = go defaultOptions
                     . Path.anchor
                     . Path.forgetType
                 )
-                $ MP.parse (Parser.directory @_ @Void Format.local) "" absDir
+                $ MP.parse (Parser.directory @Void Format.local) "" absDir
           }
         rest
     go _ ("--set" : _) =
@@ -209,7 +209,7 @@ showResult (UserDirectory dir) =
     (IO.putStrLn . (("  " <> dir <> ": ") <>) . serialize Format.local)
 
 data Error
-  = ConfigFailure (Config.Error String)
+  = ConfigFailure Config.Error
   | -- | When trying to resolve a relative output path, but we couldn’t
     --   determine what @./@ refers to.
     FailedToResolveCurrentDirectory (FS.InternalFailure FS.PathRep Void)

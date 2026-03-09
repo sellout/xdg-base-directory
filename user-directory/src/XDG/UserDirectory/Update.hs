@@ -49,7 +49,7 @@ import "this" XDG.UserDirectory.Type
 --
 -- @since 0.0.1.0
 data UpdateError
-  = ConfigError (Config.Error String)
+  = ConfigError Config.Error
   | -- | Could not look up the directory configuration.
     LookupError BaseDir.Error
   | -- | Failed to create the directory.

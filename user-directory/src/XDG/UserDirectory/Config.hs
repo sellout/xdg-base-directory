@@ -23,9 +23,9 @@ import "base" Control.Monad (unless, (=<<))
 import "base" Data.Bifunctor (first)
 import "base" Data.Either (Either (Left), either)
 import "base" Data.Eq (Eq)
+import "base" Data.Foldable (length)
 import "base" Data.Function (const, ($))
 import "base" Data.Functor (fmap, (<$>))
-import qualified "base" Data.Kind as Kind
 import "base" Data.List.NonEmpty (NonEmpty)
 import "base" Data.String (IsString, String)
 import "base" GHC.Generics (Generic)
@@ -55,16 +55,14 @@ import "this" XDG.UserDirectory.Parser
 -- | Errors that can occur when loading the configuration.
 --
 -- @since 0.0.1.0
-data Error (s :: Kind.Type)
+data Error
   = -- | Could not determine the config home directory.
     ConfigHomeError (NonEmpty BaseDir.Error)
   | -- | Failed to parse the config file.
-    ParseFailed (ParseError String s)
+    ParseFailed ParseError
   | -- | The config file does not exist or could not be read.
     ConfigFileNotFound
   deriving stock (Eq, Generic, Show)
-
-type role Error nominal
 
 -- | The location of the XDG user dirs config file.
 --
@@ -79,13 +77,16 @@ parseFile ::
   Path 'Abs 'File String ->
   IO (Either (MP.ParseErrorBundle String e) a)
 parseFile p file =
-  Patch.withFile file IO.ReadMode $
-    fmap (MP.parse p (Path.toText Format.local file)) . IO.hGetContents
+  Patch.withFile file IO.ReadMode \h -> do
+    text <- IO.hGetContents h
+    -- Force the text to be fully read before the handle is closed
+    let !_ = length text
+    pure $ MP.parse p (Path.toText Format.local file) text
 
 -- | Load the user directories configuration from the provided file.
 --
 -- @since 0.0.1.0
-loadFrom :: Path 'Abs 'File String -> IO (Either (Error String) (UserDirsConfig String))
+loadFrom :: Path 'Abs 'File String -> IO (Either Error (UserDirsConfig String))
 loadFrom =
   fmap (either (\() -> Left ConfigFileNotFound) (first ParseFailed))
     . tryJust (\e -> unless (isDoesNotExistError e) empty)
@@ -95,7 +96,7 @@ loadFrom =
 --   @$XDG_CONFIG_HOME/user-dirs.dirs@.
 --
 -- @since 0.0.1.0
-load :: IO (Either (Error String) (UserDirsConfig String))
+load :: IO (Either Error (UserDirsConfig String))
 load =
   either (pure . Left . ConfigHomeError) loadFrom . theseToEither
     =<< defaultFile

@@ -59,8 +59,8 @@ main = do
 
   -- Test basic directory lookup (DESKTOP)
   IO.putStrLn "Test: xdg-user-dir DESKTOP"
-  (out1, _) <- runXdgUserDir exe ["DESKTOP"]
-  assert "Expected path containing 'Desktop' or HOME" $
+  (out1, err1) <- runXdgUserDir exe ["DESKTOP"]
+  assert ("Expected path containing 'Desktop' or HOME, but got " <> out1 <> " with " <> err1) $
     "Desktop" `isInfixOf` out1
   pass $ "Got " <> out1
 

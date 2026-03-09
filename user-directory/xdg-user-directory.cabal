@@ -206,13 +206,14 @@ library
     megaparsec,
     pathway,
     pathway-system,
-    text,
+    strict,
     these,
     transformers,
     xdg-base-directory,
     xdg-base-directory-internal,
   exposed-modules:
     XDG.UserDirectory
+    XDG.UserDirectory.Common
     XDG.UserDirectory.Config
     XDG.UserDirectory.Parser
     XDG.UserDirectory.Type
@@ -239,8 +240,13 @@ executable xdg-user-dirs-update
   main-is: XdgUserDirsUpdate.hs
   build-depends:
     containers,
-    directory,
+    megaparsec,
     pathway,
+    pathway-system,
+    strict,
+    these,
+    transformers,
+    xdg-base-directory,
     xdg-base-directory-internal,
     xdg-user-directory,
 

@@ -25,6 +25,7 @@ import qualified "base" System.IO as IO
 import qualified "pathway" Data.Path.Format as Format
 import "xdg-base-directory-internal" Data.Path.Patch (serialize)
 import "xdg-user-directory" XDG.UserDirectory (getUserDirectory)
+import qualified "xdg-user-directory" XDG.UserDirectory.Config as Config
 import "xdg-user-directory" XDG.UserDirectory.Type
   ( UserDirectory (UserDirectory),
   )
@@ -36,14 +37,21 @@ main :: IO ()
 main =
   ( \case
       [dir] ->
-        either
-          ( \err -> do
-              IO.print err
-              exitFailure
-          )
-          (IO.putStrLn . serialize Format.local)
-          <=< getUserDirectory
-          $ UserDirectory dir
+        ( either
+            ( \err -> do
+                IO.print err
+                exitFailure
+            )
+            ( either
+                ( \err -> do
+                    IO.print err
+                    exitFailure
+                )
+                (IO.putStrLn . serialize Format.local)
+                <=< getUserDirectory (UserDirectory dir)
+            )
+        )
+          =<< Config.load
       _ -> do
         progName <- Env.getProgName
         IO.hPutStrLn IO.stderr $ "Usage " <> progName <> " <dir-type>"

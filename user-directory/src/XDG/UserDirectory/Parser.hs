@@ -1,5 +1,7 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE Safe #-}
 {-# OPTIONS_GHC -Wno-missed-specialisations #-}
+{-# OPTIONS_GHC -Wno-term-variable-capture #-}
 
 -- |
 -- Copyright: 2026 Greg Pfeil
@@ -21,7 +23,7 @@
 module XDG.UserDirectory.Parser
   ( -- * Parsing
     parseUserDirs,
-    parsePathToDirectoryValue,
+    pathToDirectoryValue,
     ParseError,
 
     -- * Serialization
@@ -30,6 +32,7 @@ module XDG.UserDirectory.Parser
 
     -- * Config manipulation
     setDirectory,
+    configFileFormat,
 
     -- * Types
     DirectoryValue (..),
@@ -39,101 +42,102 @@ where
 
 import "base" Control.Applicative (pure, (*>), (<*), (<|>))
 import "base" Control.Category ((.))
-import "base" Control.Monad (void)
-import "base" Data.Bool (otherwise, (&&))
+import "base" Control.Monad (void, (=<<))
+import "base" Data.Bool (Bool (False), (&&))
 import "base" Data.Char (Char)
 import "base" Data.Either (Either)
 import "base" Data.Eq (Eq, (/=))
-import "base" Data.Foldable (concatMap)
 import "base" Data.Function (($))
-import "base" Data.Functor ((<$), (<$>))
+import "base" Data.Functor (fmap, (<$), (<$>))
 import qualified "base" Data.Kind as Kind
-import "base" Data.List (drop, isPrefixOf, length, unlines)
-import "base" Data.Maybe (Maybe (Just, Nothing), catMaybes)
+import "base" Data.List (unlines)
+import "base" Data.Maybe (Maybe (Nothing), catMaybes)
+import "base" Data.Monoid (Monoid, mempty)
 import "base" Data.Ord (Ord)
 import "base" Data.Semigroup ((<>))
-import "base" Data.String (String)
-import "base" GHC.Generics (Generic)
-import "base" Text.Show (Show)
+import "base" Data.String (IsString, String)
+import "base" Data.Type.Equality (type (~))
+import "base" System.IO (IO)
 import qualified "containers" Data.Map.Strict as Map
 import "megaparsec" Text.Megaparsec
-  ( Parsec,
-    anySingle,
+  ( anySingle,
     between,
     chunk,
     eof,
     manyTill,
-    noneOf,
     optional,
-    parse,
     sepEndBy,
     takeWhile1P,
     try,
   )
+import qualified "megaparsec" Text.Megaparsec as MP
 import "megaparsec" Text.Megaparsec.Char (char, newline, space1)
 import qualified "megaparsec" Text.Megaparsec.Char.Lexer as L
 import qualified "megaparsec" Text.Megaparsec.Error as E
-import qualified "text" Data.Text as T
-import "this" XDG.UserDirectory.Type (UserDirectory (UserDirectory))
-
--- | A directory value from the config file.
-data DirectoryValue
-  = -- | A path relative to @$HOME@
-    HomeRelative String
-  | -- | An absolute path
-    Absolute String
-  deriving stock (Eq, Generic, Ord, Show)
-
--- | Parsed user directories configuration.
-type UserDirsConfig = Map.Map UserDirectory DirectoryValue :: Kind.Type
+import "pathway" Data.Path (Path, Relativity (Abs, Rel), Type (Dir))
+import qualified "pathway" Data.Path as Path
+import "pathway" Data.Path.Format (Format)
+import qualified "pathway" Data.Path.Format as Format
+import qualified "pathway" Data.Path.Parser as Parser
+-- FIXME: Probably shouldn’t be using strict `Maybe` for this in Pathway.
+import "strict" Data.Strict.Maybe (maybe)
+import qualified "xdg-base-directory" XDG.BaseDirectory.Internal as FS
+import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
+import "this" XDG.UserDirectory.Type
+  ( DirectoryValue (Absolute, HomeRelative),
+    UserDirectory (UserDirectory),
+    UserDirsConfig,
+  )
 
 -- | Parse error type.
-type ParseError = E.ParseErrorBundle T.Text () :: Kind.Type
-
--- | Parser type.
-type Parser = Parsec () T.Text :: Kind.Type -> Kind.Type
+type ParseError (s :: Kind.Type) (e :: Kind.Type) = E.ParseErrorBundle s e :: Kind.Type
 
 -- | Skip whitespace and comments.
-spaceConsumer :: Parser ()
-spaceConsumer =
-  L.space
-    space1
-    (L.skipLineComment (T.pack "#"))
-    (L.skipBlockComment (T.pack "/*") (T.pack "*/"))
+spaceConsumer :: (MP.MonadParsec void s p, MP.Token s ~ Char, IsString (MP.Tokens s)) => p ()
+spaceConsumer = L.space space1 (L.skipLineComment "#") (L.skipBlockComment "/*" "*/")
 
--- | Parse an escape sequence within a quoted string.
-escapeChar :: Parser Char
-escapeChar =
-  char '\\'
-    *> ( ('\\' <$ char '\\')
-           <|> ('"' <$ char '"')
-           <|> ('$' <$ char '$')
-           <|> anySingle
-       )
+-- |
+--
+--  __FIXME__: Pathway should be using `MP.MonadParsec`, not `MP.Parsec` directly.
+anchoredPath :: (Ord void, MP.Stream s, IsString (MP.Tokens s), Monoid (MP.Tokens s), MP.Token s ~ Char) => MP.Parsec void s (Path.Anchored (MP.Tokens s))
+anchoredPath =
+  Path.anchor . Path.forgetType <$> Parser.directory configFileFormat
 
--- | Parse the content of a quoted string.
-quotedContent :: Parser String
-quotedContent = manyTill (escapeChar <|> noneOf ['"', '\\']) (char '"')
+relDir :: (MP.Stream s, IsString (MP.Tokens s), Monoid (MP.Tokens s), MP.Token s ~ Char) => MP.Parsec String s (Path ('Rel 'False) 'Dir (MP.Tokens s))
+relDir =
+  ( \case
+      Path.RelDir rd -> pure rd
+      _ -> MP.customFailure "Not the path we were looking for."
+  )
+    =<< anchoredPath
+
+absDir :: (MP.Stream s, IsString (MP.Tokens s), Monoid (MP.Tokens s), MP.Token s ~ Char) => MP.Parsec String s (Path 'Abs 'Dir (MP.Tokens s))
+absDir =
+  ( \case
+      Path.AbsDir ad -> pure ad
+      _ -> MP.customFailure "Not the path we were looking for."
+  )
+    =<< anchoredPath
 
 -- | Parse a value (either $HOME/... or /...).
-parseValue :: Parser DirectoryValue
+parseValue :: (MP.Stream s, IsString (MP.Tokens s), Monoid (MP.Tokens s), MP.Token s ~ Char) => MP.Parsec String s (DirectoryValue (MP.Tokens s))
 parseValue =
-  between (char '"') (pure ()) $
-    (HomeRelative <$> (chunk (T.pack "$HOME") *> optional (char '/') *> quotedContent))
-      <|> (Absolute <$> quotedContent)
+  between (char '"') (char '"') $
+    (chunk "$HOME/" *> (HomeRelative <$> relDir))
+      <|> (Absolute <$> absDir)
 
 -- | Parse an XDG variable name and extract the directory type.
 --
 --   Expects format: @XDG_<TYPE>_DIR=@
-parseVarName :: Parser (Maybe UserDirectory)
+parseVarName :: (MP.MonadParsec void s p, MP.Token s ~ Char, MP.Tokens s ~ String) => p (Maybe UserDirectory)
 parseVarName = do
-  _ <- chunk (T.pack "XDG_")
-  name <- T.unpack <$> takeWhile1P Nothing (\c -> c /= '=' && c /= '_')
-  _ <- chunk (T.pack "_DIR=")
+  _ <- chunk "XDG_"
+  name <- takeWhile1P Nothing (\c -> c /= '=' && c /= '_')
+  _ <- chunk "_DIR="
   pure . pure $ UserDirectory name
 
 -- | Parse a single assignment line.
-parseLine :: Parser (Maybe (UserDirectory, DirectoryValue))
+parseLine :: (MP.Stream s, IsString (MP.Tokens s), Monoid (MP.Tokens s), MP.Token s ~ Char, MP.Tokens s ~ String) => MP.Parsec String s (Maybe (UserDirectory, DirectoryValue (MP.Tokens s)))
 parseLine = do
   mDir <- parseVarName
   value <- parseValue
@@ -141,22 +145,32 @@ parseLine = do
 
 -- | Skip unknown lines (lines that don't parse as XDG user dirs).
 --   Requires at least one character to be skipped (won't match empty at EOF).
-skipLine :: Parser ()
+skipLine :: (MP.MonadParsec void s p, MP.Token s ~ Char) => p ()
 skipLine = void $ anySingle *> manyTill anySingle (void newline <|> eof)
 
 -- | Parse a line or skip it if it doesn't match.
-parseOrSkipLine :: Parser (Maybe (UserDirectory, DirectoryValue))
+parseOrSkipLine :: (MP.Stream s, IsString (MP.Tokens s), Monoid (MP.Tokens s), MP.Token s ~ Char, MP.Tokens s ~ String) => MP.Parsec String s (Maybe (UserDirectory, DirectoryValue (MP.Tokens s)))
 parseOrSkipLine = try parseLine <|> (Nothing <$ skipLine)
 
 -- | Parse the entire user-dirs.dirs file.
-parseUserDirs :: T.Text -> Either ParseError UserDirsConfig
+parseUserDirs :: (MP.Stream s, IsString (MP.Tokens s), Monoid (MP.Tokens s), MP.Token s ~ Char, MP.Tokens s ~ String) => MP.Parsec String s (UserDirsConfig (MP.Tokens s))
 parseUserDirs =
-  parse
-    ( spaceConsumer
-        *> (Map.fromList . catMaybes <$> sepEndBy parseOrSkipLine (void (optional newline)))
-        <* eof
-    )
-    "user-dirs.dirs"
+  spaceConsumer
+    *> (Map.fromList . catMaybes <$> sepEndBy parseOrSkipLine (void $ optional newline))
+    <* eof
+
+-- | Regardless of system, the user-dirs.dirs file is always written in POSIX
+--   format, with a minimal set of substitutions.
+--
+--   When displaying paths to the user, we should still use `Format.local`.
+configFileFormat :: (IsString rep, Monoid rep, Ord rep) => Format rep
+configFileFormat =
+  Format.posix
+    { -- Ensure we never output `./` at the start of a path.
+      Format.current = mempty,
+      -- These are the only substitutions supported by xdg-user-dirs.
+      Format.substitutions = Map.fromList [("\"", "\\\""), ("\\", "\\\\")]
+    }
 
 -- | Serialize a directory value to its config file representation.
 --
@@ -164,19 +178,18 @@ parseUserDirs =
 --
 --   - @HomeRelative "Desktop"@ becomes @\"$HOME/Desktop\"@
 --   - @Absolute "/tmp/test"@ becomes @\"/tmp/test\"@
-serializeDirectoryValue :: DirectoryValue -> String
+--
+--  __FIXME__: Export `Substible` from Pathway, so we don’t have to hardcode `rep` here.
+serializeDirectoryValue ::
+  ( IsString rep,
+    Monoid rep,
+    Ord rep,
+    rep ~ String -- Path.Substible rep
+  ) =>
+  DirectoryValue rep -> rep
 serializeDirectoryValue = \case
-  HomeRelative path -> "\"$HOME/" <> escapeString path <> "\""
-  Absolute path -> "\"" <> escapeString path <> "\""
-
--- | Escape special characters in a string for the config file format.
-escapeString :: String -> String
-escapeString = concatMap escapeChar'
-  where
-    escapeChar' '\\' = "\\\\"
-    escapeChar' '"' = "\\\""
-    escapeChar' '$' = "\\$"
-    escapeChar' c = [c]
+  HomeRelative path -> "\"$HOME/" <> Path.toText configFileFormat path <> "\""
+  Absolute path -> "\"" <> Path.toText configFileFormat path <> "\""
 
 -- | Serialize a user directories config to the file format.
 --
@@ -184,9 +197,9 @@ escapeString = concatMap escapeChar'
 --
 --   > XDG_DESKTOP_DIR="$HOME/Desktop"
 --   > XDG_DOWNLOAD_DIR="$HOME/Downloads"
-serializeUserDirs :: UserDirsConfig -> T.Text
+serializeUserDirs :: UserDirsConfig String -> String
 serializeUserDirs config =
-  T.pack . unlines $ serializeLine <$> Map.toList config
+  unlines $ serializeLine <$> Map.toList config
   where
     serializeLine (UserDirectory name, value) =
       "XDG_" <> name <> "_DIR=" <> serializeDirectoryValue value
@@ -197,20 +210,18 @@ serializeUserDirs config =
 --
 --   - @/absolute/path@ becomes @Just (Absolute "/absolute/path")@
 --   - @$HOME/path@ becomes @Just (HomeRelative "path")@
---   - @~/path@ becomes @Just (HomeRelative "path")@
---   - @relative/path@ becomes @Nothing@ (rejected)
-parsePathToDirectoryValue :: String -> Maybe DirectoryValue
-parsePathToDirectoryValue path
-  | "/" `isPrefixOf` path = Just (Absolute path)
-  | "$HOME/" `isPrefixOf` path = Just (HomeRelative (drop (length "$HOME/") path))
-  | "$HOME" `isPrefixOf` path = Just (HomeRelative (drop (length "$HOME") path))
-  | "~/" `isPrefixOf` path = Just (HomeRelative (drop (length "~/") path))
-  | "~" `isPrefixOf` path = Just (HomeRelative (drop (length "~") path))
-  | otherwise = Nothing
+--   - anything else becomes @Nothing@ (rejected)
+pathToDirectoryValue ::
+  (Eq rep, System.Rep rep) =>
+  Path 'Abs 'Dir rep ->
+  IO (Either FS.Error (DirectoryValue rep))
+pathToDirectoryValue path =
+  fmap (maybe (Absolute path) HomeRelative . (`Path.routePrefix` path))
+    <$> FS.getHomeDirectory
 
 -- | Set a directory in the config.
 --
 --   Updates the config with the specified directory value, adding it if
 --   it doesn't exist or replacing it if it does.
-setDirectory :: UserDirectory -> DirectoryValue -> UserDirsConfig -> UserDirsConfig
+setDirectory :: UserDirectory -> DirectoryValue rep -> UserDirsConfig rep -> UserDirsConfig rep
 setDirectory = Map.insert

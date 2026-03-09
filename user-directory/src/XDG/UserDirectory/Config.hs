@@ -8,9 +8,11 @@
 --
 -- Configuration loading from @$XDG_CONFIG_HOME/user-dirs.dirs@.
 module XDG.UserDirectory.Config
-  ( loadConfig,
-    writeConfigTo,
-    ConfigError (..),
+  ( load,
+    loadFrom,
+    writeTo,
+    defaultFile,
+    Error (..),
   )
 where
 
@@ -22,23 +24,30 @@ import "base" Data.Bifunctor (first)
 import "base" Data.Either (Either (Left), either)
 import "base" Data.Eq (Eq)
 import "base" Data.Function (const, ($))
-import "base" Data.Functor ((<$>))
+import "base" Data.Functor (fmap, (<$>))
+import qualified "base" Data.Kind as Kind
 import "base" Data.List.NonEmpty (NonEmpty)
-import "base" Data.String (String)
+import "base" Data.String (IsString, String)
 import "base" GHC.Generics (Generic)
+import "base" System.IO (IO)
 import qualified "base" System.IO as IO
 import "base" System.IO.Error (isDoesNotExistError)
 import "base" Text.Show (Show)
-import "pathway" Data.Path ((</>))
+import qualified "megaparsec" Text.Megaparsec as MP
+import "pathway" Data.Path (Path, Relativity (Abs), Type (File), (</>))
+import qualified "pathway" Data.Path as Path
+import qualified "pathway" Data.Path.Format as Format
 import "pathway" Data.Path.TH (posix)
-import qualified "text" Data.Text.IO as TIO
 import "these" Data.These (These, these)
 import qualified "xdg-base-directory" XDG.BaseDirectory as BaseDir
-import "xdg-base-directory" XDG.BaseDirectory.Internal (Error)
+-- FIXME: Shouldn’t need to import from ".Internal".
+import qualified "xdg-base-directory" XDG.BaseDirectory.Internal as BaseDir
 import qualified "xdg-base-directory-internal" Data.Path.Patch as Patch
+import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
 import "this" XDG.UserDirectory.Parser
   ( ParseError,
     UserDirsConfig,
+    configFileFormat,
     parseUserDirs,
     serializeUserDirs,
   )
@@ -46,39 +55,52 @@ import "this" XDG.UserDirectory.Parser
 -- | Errors that can occur when loading the configuration.
 --
 -- @since 0.0.1.0
-data ConfigError
+data Error (s :: Kind.Type)
   = -- | Could not determine the config home directory.
-    ConfigHomeError (NonEmpty Error)
+    ConfigHomeError (NonEmpty BaseDir.Error)
   | -- | Failed to parse the config file.
-    ParseFailed ParseError
+    ParseFailed (ParseError String s)
   | -- | The config file does not exist or could not be read.
     ConfigFileNotFound
   deriving stock (Eq, Generic, Show)
 
--- | Load the user directories configuration from @$XDG_CONFIG_HOME/user-dirs.dirs@.
+type role Error nominal
+
+-- | The location of the XDG user dirs config file.
 --
 -- @since 0.0.1.0
-loadConfig :: IO.IO (Either ConfigError UserDirsConfig)
-loadConfig =
-  either
-    (pure . Left . ConfigHomeError)
-    ( \configHome ->
-        either
-          (\() -> Left ConfigFileNotFound)
-          (first ParseFailed . parseUserDirs)
-          <$> tryJust
-            (\e -> unless (isDoesNotExistError e) empty)
-            -- Force the text to be fully read before the handle is closed
-            ( Patch.withFile @_ @String
-                (configHome </> [posix|user-dirs.dirs|])
-                IO.ReadMode
-                TIO.hGetContents
-            )
-    )
-    . theseToEither
-    =<< BaseDir.configHome
+defaultFile ::
+  (IsString rep, System.Rep rep) =>
+  IO (These (NonEmpty BaseDir.Error) (Path 'Abs 'File rep))
+defaultFile = fmap (</> [posix|user-dirs.dirs|]) <$> BaseDir.configHome
+
+parseFile ::
+  MP.Parsec e String a ->
+  Path 'Abs 'File String ->
+  IO (Either (MP.ParseErrorBundle String e) a)
+parseFile p file =
+  Patch.withFile file IO.ReadMode $
+    fmap (MP.parse p (Path.toText Format.local file)) . IO.hGetContents
+
+-- | Load the user directories configuration from the provided file.
+--
+-- @since 0.0.1.0
+loadFrom :: Path 'Abs 'File String -> IO (Either (Error String) (UserDirsConfig String))
+loadFrom =
+  fmap (either (\() -> Left ConfigFileNotFound) (first ParseFailed))
+    . tryJust (\e -> unless (isDoesNotExistError e) empty)
+    . parseFile parseUserDirs
+
+-- | Load the user directories configuration from
+--   @$XDG_CONFIG_HOME/user-dirs.dirs@.
+--
+-- @since 0.0.1.0
+load :: IO (Either (Error String) (UserDirsConfig String))
+load =
+  either (pure . Left . ConfigHomeError) loadFrom . theseToEither
+    =<< defaultFile
   where
-    theseToEither :: These (NonEmpty a) b -> Either (NonEmpty a) b
+    theseToEither :: These a b -> Either a b
     theseToEither = these Left pure $ const pure
 
 -- | Write a user directories configuration to a file path.
@@ -87,5 +109,6 @@ loadConfig =
 --   actual config file.
 --
 -- @since 0.0.1.0
-writeConfigTo :: String -> UserDirsConfig -> IO.IO ()
-writeConfigTo path config = TIO.writeFile path (serializeUserDirs config)
+writeTo :: Path 'Abs 'File String -> UserDirsConfig String -> IO ()
+writeTo path =
+  IO.writeFile (Path.toText configFileFormat path) . serializeUserDirs

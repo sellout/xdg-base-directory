@@ -79,7 +79,8 @@ parseFile ::
 parseFile p file =
   Patch.withFile file IO.ReadMode \h -> do
     text <- IO.hGetContents h
-    -- Force the text to be fully read before the handle is closed
+    -- FIXME: Don’t do this – use `with` operations to make sure everything is
+    --        done while the handle is open.
     let !_ = length text
     pure $ MP.parse p (Path.toText Format.local file) text
 
@@ -87,10 +88,11 @@ parseFile p file =
 --
 -- @since 0.0.1.0
 loadFrom :: Path 'Abs 'File String -> IO (Either Error (UserDirsConfig String))
-loadFrom =
+loadFrom file = do
+  IO.print file
   fmap (either (\() -> Left ConfigFileNotFound) (first ParseFailed))
     . tryJust (\e -> unless (isDoesNotExistError e) empty)
-    . parseFile parseUserDirs
+    $ parseFile parseUserDirs file
 
 -- | Load the user directories configuration from
 --   @$XDG_CONFIG_HOME/user-dirs.dirs@.

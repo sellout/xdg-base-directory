@@ -15,24 +15,26 @@
 -- Options:
 --   --help               Display help and exit
 --   --force              Force update even if directories already exist
---   --dummy-output PATH  Write results to PATH instead of actual config file
---   --set NAME PATH      Set a specific directory
+--   --dummy-output FILE  Write results to FILE instead of actual config file
+--   --set NAME DIR       Set a specific directory
 module Main (main) where
 
-import "base" Control.Applicative (Applicative, liftA2, pure)
+import "base" Control.Applicative (Applicative, empty, liftA2, pure)
 import "base" Control.Category ((.))
 import "base" Control.Monad ((<=<), (=<<))
 import "base" Control.Monad.IO.Class (MonadIO, liftIO)
 import "base" Data.Bifunctor (first)
 import "base" Data.Bool (Bool (False, True))
-import "base" Data.Either (Either (Left, Right), either, fromRight)
+import "base" Data.Either (Either (Left), either, fromRight)
 import "base" Data.Eq (Eq)
-import "base" Data.Foldable (Foldable, foldr)
+import "base" Data.Foldable (Foldable, foldr, toList)
 import "base" Data.Function (const, ($))
 import "base" Data.Functor ((<$>))
-import "base" Data.List.NonEmpty (NonEmpty)
-import "base" Data.Maybe (Maybe (Just, Nothing), maybe)
+import "base" Data.List (intercalate)
+import "base" Data.List.NonEmpty (NonEmpty ((:|)))
+import "base" Data.Maybe (Maybe (Just), maybe)
 import "base" Data.Monoid (Monoid, mempty)
+import "base" Data.Ord (Ord)
 import "base" Data.Semigroup ((<>))
 import "base" Data.String (String)
 import "base" Data.Tuple (uncurry)
@@ -42,6 +44,7 @@ import qualified "base" System.Environment as Env
 import qualified "base" System.Exit as Exit
 import "base" System.IO (IO)
 import qualified "base" System.IO as IO
+import "base" Text.Read (Read)
 import "base" Text.Show (Show, show)
 import qualified "containers" Data.Map.Strict as Map
 import qualified "megaparsec" Text.Megaparsec as MP
@@ -65,7 +68,9 @@ import qualified "xdg-base-directory" XDG.BaseDirectory.Internal as BaseDir
 import "xdg-base-directory-internal" Data.Path.Patch (serialize)
 import qualified "xdg-user-directory" XDG.UserDirectory.Config as Config
 import "xdg-user-directory" XDG.UserDirectory.Parser
-  ( pathToDirectoryValue,
+  ( ParseError,
+    absDir,
+    pathToDirectoryValue,
     setDirectory,
   )
 import "xdg-user-directory" XDG.UserDirectory.Type
@@ -124,62 +129,66 @@ data Options = Options
     dummyOutput :: Maybe (Path 'Any 'File String),
     set :: Maybe (UserDirectory, Path 'Abs 'Dir String)
   }
+  deriving stock (Eq, Generic, Ord, Read, Show)
 
 defaultOptions :: Options
 defaultOptions =
   Options
     { help = False,
       force = False,
-      dummyOutput = Nothing,
-      set = Nothing
+      dummyOutput = empty,
+      set = empty
     }
 
+data OptionError
+  = UnknownOption String
+  | MissingArguments String (NonEmpty String)
+  | InvalidPath String String (Maybe ParseError)
+  deriving stock (Eq, Generic, Show)
+
+formatOptionError :: OptionError -> String
+formatOptionError = \case
+  UnknownOption opt -> "Invalid option " <> opt
+  MissingArguments opt args ->
+    opt <> " requires " <> intercalate ", " (toList args) <> " arguments"
+  InvalidPath opt path err ->
+    path
+      <> " isn’t a valid path for "
+      <> opt
+      <> maybe "" ((": " <>) . MP.errorBundlePretty) err
+
 -- | Parse command-line arguments.
-parseArgs :: [String] -> Either String Options
+parseArgs :: [String] -> Either OptionError Options
 parseArgs = go defaultOptions
   where
-    go opts [] = Right opts
-    go opts ("--help" : rest) = go opts {help = True} rest
-    go opts ("--force" : rest) = go opts {force = True} rest
-    go opts ("--dummy-output" : file : rest) =
-      go
-        opts
-          { dummyOutput =
-              either
-                (const Nothing)
-                ( ( \case
-                      Path.AbsFile abs -> pure $ Path.forgetRelativity abs
-                      Path.RelFile abs -> pure $ Path.forgetRelativity abs
-                      Path.ReparentedFile abs -> pure $ Path.forgetRelativity abs
-                      _ -> Nothing
-                  )
-                    . Path.anchor
+    go opts = \case
+      [] -> pure opts
+      ("--help" : rest) -> go opts {help = True} rest
+      ("--force" : rest) -> go opts {force = True} rest
+      ("--dummy-output" : file : rest) ->
+        either
+          (Left . InvalidPath "--dummy-output" file . pure)
+          ( maybe
+              (Left $ InvalidPath "--dummy-output" file empty)
+              (\anyFile -> go opts {dummyOutput = pure anyFile} rest)
+              . ( \case
+                    Path.AbsFile abs -> pure $ Path.forgetRelativity abs
+                    Path.RelFile rel -> pure $ Path.forgetRelativity rel
+                    Path.ReparentedFile rep -> pure $ Path.forgetRelativity rep
+                    _ -> empty
                 )
-                $ MP.parse (Parser.path @Void Format.local) "" file
-          }
-        rest
-    go _ ("--dummy-output" : _) =
-      Left "--dummy-output requires a PATH argument"
-    go opts ("--set" : name : absDir : rest) =
-      go
-        opts
-          { set =
-              either
-                (const Nothing)
-                ( ( \case
-                      Path.AbsDir abs -> pure (UserDirectory name, abs)
-                      _ -> Nothing
-                  )
-                    . Path.anchor
-                    . Path.forgetType
-                )
-                $ MP.parse (Parser.directory @Void Format.local) "" absDir
-          }
-        rest
-    go _ ("--set" : _) =
-      Left "--set requires NAME and PATH arguments"
-    go _ (arg : _) =
-      Left $ "Invalid argument " <> arg
+              . Path.anchor
+          )
+          $ MP.parse (Parser.path Format.local) "" file
+      ("--dummy-output" : []) ->
+        Left . MissingArguments "--dummy-output" $ pure "FILE"
+      ("--set" : name : dir : rest) ->
+        either
+          (Left . InvalidPath "--set" dir . pure)
+          (\d -> go opts {set = pure (UserDirectory name, d)} rest)
+          $ MP.parse absDir "" dir
+      ("--set" : _) -> Left . MissingArguments "--set" $ "NAME" :| ["DIR"]
+      (arg : _) -> Left $ UnknownOption arg
 
 -- | Display help message.
 showHelp :: IO ()
@@ -260,7 +269,7 @@ main =
         progName <- Env.getProgName
         foldTraverse
           (IO.hPutStrLn IO.stderr)
-          [ "Error: " <> err,
+          [ "Error: " <> formatOptionError err,
             "Try ‘" <> progName <> " --help’ for more information."
           ]
         Exit.exitFailure

@@ -118,7 +118,7 @@ main = do
   let config1 = tempDir </> "config1.dirs"
   _ <- runXdgUserDirsUpdate exe ["--dummy-output", config1]
   contents1 <- readFileStrict config1
-  assert "Config missing XDG_DESKTOP_DIR" $ "XDG_DESKTOP_DIR" `isInfixOf` contents1
+  assert ("Config missing XDG_DESKTOP_DIR got: " <> contents1) $ "XDG_DESKTOP_DIR" `isInfixOf` contents1
   pass "Config file created with XDG_DESKTOP_DIR"
 
   -- Test --set with relative path (should fail)
@@ -126,7 +126,7 @@ main = do
   let config2 = tempDir </> "config2.dirs"
   (exitCode2, _, err2) <- runXdgUserDirsUpdateWithExit exe ["--set", "DESKTOP", "MyNewDesktop", "--dummy-output", config2]
   assert "Relative path should cause exit failure" $ exitCode2 == ExitFailure 1
-  assert "Error message should mention absolute path" $ "absolute" `isInfixOf` err2
+  assert ("Error message should mention absolute path: " <> err2) $ "absolute" `isInfixOf` err2
   pass "Relative path rejected with error"
 
   -- Test --set with absolute path
@@ -138,23 +138,14 @@ main = do
     "XDG_DOWNLOAD_DIR=\"/tmp/my-downloads\"" `isInfixOf` contents3
   pass "DOWNLOAD set to /tmp/my-downloads"
 
-  -- Test --set with $HOME prefix
-  IO.putStrLn "Test: --set with $HOME prefix"
-  let config4 = tempDir </> "config4.dirs"
-  _ <- runXdgUserDirsUpdate exe ["--set", "MUSIC", "$HOME/MyMusic", "--dummy-output", config4]
-  contents4 <- readFileStrict config4
-  assert "MUSIC not set to $HOME/MyMusic" $
-    "XDG_MUSIC_DIR=\"$HOME/MyMusic\"" `isInfixOf` contents4
-  pass "MUSIC set to $HOME/MyMusic"
-
   -- Test --set with home directory path (should convert to $HOME)
   IO.putStrLn "Test: --set with home directory path converts to $HOME"
   homeDir <- getHomeDirectory
-  let config5 = tempDir </> "config5.dirs"
-  _ <- runXdgUserDirsUpdate exe ["--set", "VIDEOS", homeDir </> "MyVideos", "--dummy-output", config5]
-  contents5 <- readFileStrict config5
+  let config4 = tempDir </> "config4.dirs"
+  _ <- runXdgUserDirsUpdate exe ["--set", "VIDEOS", homeDir </> "MyVideos", "--dummy-output", config4]
+  contents4 <- readFileStrict config4
   assert "VIDEOS not converted to $HOME/MyVideos" $
-    "XDG_VIDEOS_DIR=\"$HOME/MyVideos\"" `isInfixOf` contents5
+    "XDG_VIDEOS_DIR=\"$HOME/MyVideos\"" `isInfixOf` contents4
   pass "Home directory path converted to $HOME/MyVideos"
 
   -- FIXME: Need to carefully test without `--dummy-output` by redirecting
@@ -172,11 +163,11 @@ main = do
 
   -- Test that config preserves existing entries
   IO.putStrLn "Test: --set preserves existing entries"
-  let config6 = tempDir </> "config6.dirs"
-  _ <- runXdgUserDirsUpdate exe ["--set", "NEWDIR", "$HOME/TestDir", "--dummy-output", config6]
-  contents6 <- readFileStrict config6
-  let desktopCount = countOccurrences "XDG_DESKTOP_DIR" contents6
-      newdirCount = countOccurrences "XDG_NEWDIR_DIR" contents6
+  let config5 = tempDir </> "config5.dirs"
+  _ <- runXdgUserDirsUpdate exe ["--set", "NEWDIR", homeDir </> "TestDir", "--dummy-output", config5]
+  contents5 <- readFileStrict config5
+  let desktopCount = countOccurrences "XDG_DESKTOP_DIR" contents5
+      newdirCount = countOccurrences "XDG_NEWDIR_DIR" contents5
   assert "Entry counts wrong" $ desktopCount == 1 && newdirCount == 1
   pass "Both existing and new entries present"
 

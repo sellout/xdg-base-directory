@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE Safe #-}
+{-# LANGUAGE Trustworthy #-}
 {-# OPTIONS_GHC -Wno-missed-specialisations #-}
 
 -- |
@@ -23,6 +23,7 @@ module XDG.UserDirectory.Parser
   ( -- * Parsing
     parseUserDirs,
     pathToDirectoryValue,
+    absDir,
     ParseError,
 
     -- * Serialization
@@ -39,19 +40,20 @@ module XDG.UserDirectory.Parser
   )
 where
 
-import "base" Control.Applicative (pure, (*>), (<*), (<|>))
+import "base" Control.Applicative (empty, many, pure, (*>), (<*), (<|>))
 import "base" Control.Category ((.))
 import "base" Control.Monad (void, (=<<))
-import "base" Data.Bool (Bool (False), not, (&&))
+import "base" Data.Bool (Bool (False), not, otherwise, (&&))
 import "base" Data.Char (Char, isSpace)
-import "base" Data.Either (Either)
-import "base" Data.Eq (Eq, (/=))
-import "base" Data.Foldable (Foldable)
-import "base" Data.Function (($))
+import "base" Data.Either (Either, either)
+import "base" Data.Eq (Eq, (/=), (==))
+import "base" Data.Foldable (Foldable, length)
+import "base" Data.Function (const, ($))
 import "base" Data.Functor (Functor, fmap, (<$), (<$>))
 import qualified "base" Data.Kind as Kind
-import "base" Data.List (unlines)
-import "base" Data.Maybe (Maybe (Nothing), catMaybes)
+import "base" Data.List (isSuffixOf, take, unlines)
+import "base" Data.List.NonEmpty (NonEmpty ((:|)))
+import "base" Data.Maybe (Maybe, catMaybes, maybe)
 import "base" Data.Monoid (Monoid, mempty)
 import "base" Data.Ord (Ord)
 import "base" Data.Semigroup ((<>))
@@ -77,6 +79,7 @@ import "megaparsec" Text.Megaparsec
 import qualified "megaparsec" Text.Megaparsec as MP
 import "megaparsec" Text.Megaparsec.Char (char, newline, space1)
 import qualified "megaparsec" Text.Megaparsec.Char.Lexer as L
+import qualified "megaparsec" Text.Megaparsec.Debug as MP
 import qualified "megaparsec" Text.Megaparsec.Error as E
 import "pathway" Data.Path (Path, Type (Dir))
 import qualified "pathway" Data.Path as Path
@@ -85,7 +88,7 @@ import qualified "pathway" Data.Path.Format as Format
 import qualified "pathway" Data.Path.Parser as Parser
 import "pathway" Data.Path.Relativity (Relativity (Abs, Any, Rel))
 -- FIXME: Probably shouldn’t be using strict `Maybe` for this in Pathway.
-import "strict" Data.Strict.Maybe (maybe)
+import qualified "strict" Data.Strict.Maybe as Strict
 import qualified "xdg-base-directory" XDG.BaseDirectory.Internal as FS
 import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
 import "this" XDG.UserDirectory.Type
@@ -93,6 +96,7 @@ import "this" XDG.UserDirectory.Type
     UserDirectory (UserDirectory),
     UserDirsConfig,
   )
+import "base" Prelude ((-))
 
 -- | Parse error type.
 --
@@ -120,6 +124,19 @@ data InvalidDir (rep :: Kind.Type) = InvalidDir Relativity (Path 'Any 'Dir rep)
   deriving stock (Foldable, Functor, Generic1, Traversable)
 
 type role InvalidDir nominal
+
+instance MP.ShowErrorComponent (InvalidDir String) where
+  showErrorComponent (InvalidDir expectedRel path) =
+    "expected "
+      <> formatRel expectedRel
+      <> " directory, but "
+      <> Path.toText Format.local path
+      <> " isn’t"
+    where
+      formatRel = \case
+        Abs -> "an absolute"
+        Any -> "<internal error>"
+        Rel _ -> "a relative"
 
 relDir ::
   ( MP.MonadParsec (InvalidDir (MP.Tokens s)) s p,
@@ -150,38 +167,69 @@ absDir =
     =<< Parser.directory configFileFormat
 
 -- | Parse a value (either $HOME/... or /...).
+--
+--   Handles escape sequences @\\\\@ and @\\\"@ within the quoted value.
 parseValue ::
-  ( MP.MonadParsec (InvalidDir (MP.Tokens s)) s p,
-    IsString (MP.Tokens s),
-    Monoid (MP.Tokens s),
-    MP.Token s ~ Char
-  ) =>
-  p (DirectoryValue (MP.Tokens s))
-parseValue =
-  between (char '"') (char '"') $
-    (chunk "$HOME/" *> (HomeRelative <$> relDir))
-      <|> (Absolute <$> absDir)
+  (MP.MonadParsec (InvalidDir String) String p) =>
+  p (DirectoryValue String)
+parseValue = do
+  content <- between (char '"') (char '"') $ many contentChar
+  maybe
+    ( either (const $ parseContentAsAnyDir Abs content) (pure . Absolute) $
+        MP.parse (absDir <* eof) "" content
+    )
+    ( either
+        (const $ parseContentAsAnyDir (Rel False) content)
+        (pure . HomeRelative)
+        . MP.parse (relDir <* eof) ""
+    )
+    $ stripPrefix "$HOME/" content
+  where
+    -- Characters allowed inside the quoted value.
+    -- Handle escape sequences: \" -> ", \\ -> \
+    contentChar =
+      ('"' <$ chunk "\\\"")
+        <|> ('\\' <$ chunk "\\\\")
+        <|> MP.satisfy (\c -> c /= '"' && c /= '\\')
+
+    parseContentAsAnyDir rel =
+      either
+        (const $ MP.failure empty mempty)
+        (MP.customFailure . InvalidDir rel)
+        . MP.parse anyDirParser ""
+      where
+        anyDirParser :: MP.Parsec (InvalidDir String) String (Path 'Any 'Dir String)
+        anyDirParser = Parser.directory configFileFormat <* eof
+
+    stripPrefix :: (Eq a) => [a] -> [a] -> Maybe [a]
+    stripPrefix [] ys = pure ys
+    stripPrefix _ [] = empty
+    stripPrefix (x : xs) (y : ys)
+      | x == y = stripPrefix xs ys
+      | otherwise = empty
 
 -- | Parse an XDG variable name and extract the directory type.
 --
 --   Expects format: @XDG_<TYPE>_DIR=@
-parseVarName :: (MP.MonadParsec v String p) => p (Maybe UserDirectory)
+parseVarName :: (MP.MonadParsec v String p) => p UserDirectory
 parseVarName = do
   _ <- chunk "XDG_"
-  name <- takeWhile1P Nothing (\c -> not (isSpace c) && c /= '=')
-  -- FIXME: I _think_ the upstream parser actually allows the @=@ to be omitted,
-  --        and also arbitrary space before the quoted value.
-  _ <- chunk "_DIR="
-  pure . pure $ UserDirectory name
+  name <- takeWhile1P empty (\c -> not (isSpace c) && c /= '=')
+  if "_DIR" `isSuffixOf` name
+    then pure . UserDirectory $ take (length name - 4) name
+    else MP.unexpected . MP.Label $ 'i' :| "ncorrect var ending"
 
 -- | Parse a single assignment line.
 parseLine ::
   (MP.MonadParsec (InvalidDir String) String p) =>
-  p (Maybe (UserDirectory, DirectoryValue String))
+  p (UserDirectory, DirectoryValue String)
 parseLine = do
-  mDir <- parseVarName
+  var <- parseVarName
+  -- FIXME: I _think_ the upstream parser actually allows the @=@ to be omitted,
+  --        and also arbitrary space before the quoted value.
+  _ <- char '='
   value <- parseValue
-  pure $ (,value) <$> mDir
+  pure (var, value)
 
 -- | Skip unknown lines (lines that don't parse as XDG user dirs).
 --   Requires at least one character to be skipped (won't match empty at EOF).
@@ -190,13 +238,13 @@ skipLine = void $ anySingle *> manyTill anySingle (void newline <|> eof)
 
 -- | Parse a line or skip it if it doesn't match.
 parseOrSkipLine ::
-  (MP.MonadParsec (InvalidDir String) String p) =>
+  (MP.MonadParsecDbg (InvalidDir String) String p) =>
   p (Maybe (UserDirectory, DirectoryValue String))
-parseOrSkipLine = try parseLine <|> (Nothing <$ skipLine)
+parseOrSkipLine = (pure <$> MP.dbg "line" (try parseLine)) <|> (empty <$ skipLine)
 
 -- | Parse the entire user-dirs.dirs file.
 parseUserDirs ::
-  (MP.MonadParsec (InvalidDir String) String p) => p (UserDirsConfig String)
+  (MP.MonadParsecDbg (InvalidDir String) String p) => p (UserDirsConfig String)
 parseUserDirs =
   spaceConsumer
     *> (Map.fromList . catMaybes <$> sepEndBy parseOrSkipLine (void $ optional newline))
@@ -221,6 +269,10 @@ configFileFormat =
 --
 --   - @HomeRelative "Desktop"@ becomes @\"$HOME/Desktop\"@
 --   - @Absolute "/tmp/test"@ becomes @\"/tmp/test\"@
+--
+--
+--  __TODO__: Determine whether it’s really ok to leave the trailing slash here.
+--            I’m pretty sure it is, but don’t want to cause any breakage.
 --
 --  __FIXME__: Export `Substible` from Pathway, so we don’t have to hardcode `rep` here.
 serializeDirectoryValue ::
@@ -258,7 +310,7 @@ pathToDirectoryValue ::
   Path 'Abs 'Dir rep ->
   IO (Either FS.Error (DirectoryValue rep))
 pathToDirectoryValue path =
-  fmap (maybe (Absolute path) HomeRelative . (`Path.routePrefix` path))
+  fmap (Strict.maybe (Absolute path) HomeRelative . (`Path.routePrefix` path))
     <$> FS.getHomeDirectory
 
 -- | Set a directory in the config.

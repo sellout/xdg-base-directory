@@ -10,7 +10,6 @@
 module XDG.UserDirectory.Config
   ( load,
     loadFrom,
-    writeTo,
     defaultFile,
     Error (..),
   )
@@ -47,9 +46,7 @@ import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System
 import "this" XDG.UserDirectory.Parser
   ( ParseError,
     UserDirsConfig,
-    configFileFormat,
     parseUserDirs,
-    serializeUserDirs,
   )
 
 -- | Errors that can occur when loading the configuration.
@@ -106,12 +103,3 @@ load =
     theseToEither :: These a b -> Either a b
     theseToEither = these Left pure $ const pure
 
--- | Write a user directories configuration to a file path.
---
---   This is useful for testing with @--dummy-output@ or for updating the
---   actual config file.
---
--- @since 0.0.1.0
-writeTo :: Path 'Abs 'File String -> UserDirsConfig String -> IO ()
-writeTo path =
-  IO.writeFile (Path.toText configFileFormat path) . serializeUserDirs

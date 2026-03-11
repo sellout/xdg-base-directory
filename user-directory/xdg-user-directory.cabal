@@ -205,10 +205,7 @@ library
     containers,
     megaparsec,
     pathway,
-    pathway-system,
-    strict,
     these,
-    transformers,
     xdg-base-directory,
     xdg-base-directory-internal,
   exposed-modules:
@@ -217,7 +214,6 @@ library
     XDG.UserDirectory.Config
     XDG.UserDirectory.Parser
     XDG.UserDirectory.Type
-    XDG.UserDirectory.Update
   autogen-modules:
     Paths_xdg_user_directory
   other-modules:
@@ -230,23 +226,6 @@ executable xdg-user-dir
   main-is: XdgUserDir.hs
   build-depends:
     pathway,
-    xdg-base-directory-internal,
-    xdg-user-directory,
-
-executable xdg-user-dirs-update
-  import: defaults
-  hs-source-dirs:
-    app
-  main-is: XdgUserDirsUpdate.hs
-  build-depends:
-    containers,
-    megaparsec,
-    pathway,
-    pathway-system,
-    strict,
-    these,
-    transformers,
-    xdg-base-directory,
     xdg-base-directory-internal,
     xdg-user-directory,
 
@@ -297,19 +276,3 @@ test-suite xdg-user-dir-test
   default-extensions:
     Unsafe
 
-test-suite xdg-user-dirs-update-test
-  import: defaults
-  type: exitcode-stdio-1.0
-  hs-source-dirs:
-    tests
-  main-is: XdgUserDirsUpdateTest.hs
-  build-depends:
-    directory,
-    filepath,
-    process,
-  build-tool-depends:
-    xdg-user-directory:xdg-user-dirs-update,
-  ghc-options:
-    -Wno-missing-import-lists
-  default-extensions:
-    Unsafe

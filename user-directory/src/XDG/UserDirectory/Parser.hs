@@ -22,17 +22,8 @@
 module XDG.UserDirectory.Parser
   ( -- * Parsing
     parseUserDirs,
-    pathToDirectoryValue,
     absDir,
     ParseError,
-
-    -- * Serialization
-    serializeUserDirs,
-    serializeDirectoryValue,
-
-    -- * Config manipulation
-    setDirectory,
-    configFileFormat,
 
     -- * Types
     DirectoryValue (..),
@@ -51,7 +42,7 @@ import "base" Data.Foldable (Foldable, length)
 import "base" Data.Function (const, ($))
 import "base" Data.Functor (Functor, fmap, (<$), (<$>))
 import qualified "base" Data.Kind as Kind
-import "base" Data.List (isSuffixOf, take, unlines)
+import "base" Data.List (isSuffixOf, take)
 import "base" Data.List.NonEmpty (NonEmpty ((:|)))
 import "base" Data.Maybe (Maybe, catMaybes, maybe)
 import "base" Data.Monoid (Monoid, mempty)
@@ -59,9 +50,7 @@ import "base" Data.Ord (Ord)
 import "base" Data.Semigroup ((<>))
 import "base" Data.String (IsString, String)
 import "base" Data.Traversable (Traversable)
-import "base" Data.Type.Equality (type (~))
 import "base" GHC.Generics (Generic, Generic1)
-import "base" System.IO (IO)
 import "base" Text.Read (Read)
 import "base" Text.Show (Show)
 import qualified "containers" Data.Map.Strict as Map
@@ -87,10 +76,6 @@ import "pathway" Data.Path.Format (Format)
 import qualified "pathway" Data.Path.Format as Format
 import qualified "pathway" Data.Path.Parser as Parser
 import "pathway" Data.Path.Relativity (Relativity (Abs, Any, Rel))
--- FIXME: Probably shouldn’t be using strict `Maybe` for this in Pathway.
-import qualified "strict" Data.Strict.Maybe as Strict
-import qualified "xdg-base-directory" XDG.BaseDirectory.Internal as FS
-import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
 import "this" XDG.UserDirectory.Type
   ( DirectoryValue (Absolute, HomeRelative),
     UserDirectory (UserDirectory),
@@ -263,59 +248,3 @@ configFileFormat =
       Format.substitutions = Map.fromList [("\"", "\\\""), ("\\", "\\\\")]
     }
 
--- | Serialize a directory value to its config file representation.
---
---   Examples:
---
---   - @HomeRelative "Desktop"@ becomes @\"$HOME/Desktop\"@
---   - @Absolute "/tmp/test"@ becomes @\"/tmp/test\"@
---
---
---  __TODO__: Determine whether it’s really ok to leave the trailing slash here.
---            I’m pretty sure it is, but don’t want to cause any breakage.
---
---  __FIXME__: Export `Substible` from Pathway, so we don’t have to hardcode `rep` here.
-serializeDirectoryValue ::
-  ( IsString rep,
-    rep ~ String -- Monoid rep, Ord rep, Path.Substible rep
-  ) =>
-  DirectoryValue rep -> rep
-serializeDirectoryValue =
-  ("\"" <>) . (<> "\"") . \case
-    HomeRelative path -> "$HOME/" <> Path.toText configFileFormat path
-    Absolute path -> Path.toText configFileFormat path
-
--- | Serialize a user directories config to the file format.
---
---   Produces output like:
---
---   > XDG_DESKTOP_DIR="$HOME/Desktop"
---   > XDG_DOWNLOAD_DIR="$HOME/Downloads"
-serializeUserDirs :: UserDirsConfig String -> String
-serializeUserDirs config =
-  unlines $ serializeLine <$> Map.toList config
-  where
-    serializeLine (UserDirectory name, value) =
-      "XDG_" <> name <> "_DIR=" <> serializeDirectoryValue value
-
--- | Parse a command-line path argument into a DirectoryValue.
---
---   Handles various path formats:
---
---   - @/absolute/path@ becomes @Just (Absolute "/absolute/path")@
---   - @$HOME/path@ becomes @Just (HomeRelative "path")@
---   - anything else becomes @Nothing@ (rejected)
-pathToDirectoryValue ::
-  (Eq rep, System.Rep rep) =>
-  Path 'Abs 'Dir rep ->
-  IO (Either FS.Error (DirectoryValue rep))
-pathToDirectoryValue path =
-  fmap (Strict.maybe (Absolute path) HomeRelative . (`Path.routePrefix` path))
-    <$> FS.getHomeDirectory
-
--- | Set a directory in the config.
---
---   Updates the config with the specified directory value, adding it if
---   it doesn't exist or replacing it if it does.
-setDirectory :: UserDirectory -> DirectoryValue rep -> UserDirsConfig rep -> UserDirsConfig rep
-setDirectory = Map.insert

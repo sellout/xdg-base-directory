@@ -203,6 +203,7 @@ library
     src
   build-depends:
     containers,
+    exceptions,
     megaparsec,
     pathway,
     these,
@@ -225,7 +226,10 @@ executable xdg-user-dir
     app
   main-is: XdgUserDir.hs
   build-depends:
+    megaparsec,
     pathway,
+    pathway-system,
+    xdg-base-directory,
     xdg-base-directory-internal,
     xdg-user-directory,
 
@@ -275,4 +279,3 @@ test-suite xdg-user-dir-test
     -Wno-missing-import-lists
   default-extensions:
     Unsafe
-

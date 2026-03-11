@@ -36,11 +36,11 @@ import "base" Control.Category ((.))
 import "base" Control.Monad (void, (=<<))
 import "base" Data.Bool (Bool (False), not, otherwise, (&&))
 import "base" Data.Char (Char, isSpace)
-import "base" Data.Either (Either, either)
+import "base" Data.Either (either)
 import "base" Data.Eq (Eq, (/=), (==))
 import "base" Data.Foldable (Foldable, length)
 import "base" Data.Function (const, ($))
-import "base" Data.Functor (Functor, fmap, (<$), (<$>))
+import "base" Data.Functor (Functor, (<$), (<$>))
 import qualified "base" Data.Kind as Kind
 import "base" Data.List (isSuffixOf, take)
 import "base" Data.List.NonEmpty (NonEmpty ((:|)))
@@ -50,6 +50,7 @@ import "base" Data.Ord (Ord)
 import "base" Data.Semigroup ((<>))
 import "base" Data.String (IsString, String)
 import "base" Data.Traversable (Traversable)
+import "base" Data.Type.Equality (type (~))
 import "base" GHC.Generics (Generic, Generic1)
 import "base" Text.Read (Read)
 import "base" Text.Show (Show)
@@ -247,4 +248,3 @@ configFileFormat =
       -- These are the only substitutions supported by xdg-user-dirs.
       Format.substitutions = Map.fromList [("\"", "\\\""), ("\\", "\\\\")]
     }
-

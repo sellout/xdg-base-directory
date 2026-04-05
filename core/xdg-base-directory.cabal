@@ -204,10 +204,12 @@ library
     comonad,
     exceptions,
     pathway,
+    pathway-compat-base,
+    pathway-internal,
     pathway-system,
     these,
-    transformers,
-    xdg-base-directory-internal,
+    variant,
+    yaya,
   exposed-modules:
     Data.Annotated
     XDG.BaseDirectory
@@ -230,10 +232,10 @@ test-suite doctests
     tests
   main-is: doctests.hs
   build-depends:
-    directory,
     doctest ^>= {0.16.0, 0.17.0, 0.18.0, 0.19.0, 0.20.0, 0.21.0, 0.22.0, 0.24.0},
-    filepath,
-    temporary,
+    pathway ^>= {0.0.1},
+    pathway-compat-temporary ^>= {0.0.1},
+    pathway-system ^>= {0.0.1},
     xdg-base-directory,
   if impl(ghc >= 8.10.1)
     ghc-options:

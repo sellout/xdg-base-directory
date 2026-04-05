@@ -13,8 +13,13 @@ if impl(ghc >= 9.8)
 source-repository-package
   type: git
   location: https://github.com/sellout/pathway.git
-  branch: generalize-parsers
+  branch: more-system
   subdir:
+    compat/base
+    compat/directory
+    compat/file-io
+    compat/filepath
+    compat/temporary
     internal
     pathway
     system
@@ -32,4 +37,3 @@ tests: True
 
 packages:
   ./core/xdg-base-directory.cabal
-  ./internal/xdg-base-directory-internal.cabal

@@ -42,7 +42,7 @@
 
     pathway = {
       inputs.flaky.follows = "flaky";
-      url = "github:sellout/pathway/generalize-parsers";
+      url = "github:sellout/pathway/more-system";
     };
   };
 }

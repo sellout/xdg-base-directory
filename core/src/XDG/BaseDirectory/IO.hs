@@ -1,4 +1,4 @@
-{-# LANGUAGE Safe #-}
+{-# LANGUAGE Trustworthy #-}
 
 -- |
 -- Copyright: 2024 Greg Pfeil
@@ -53,14 +53,14 @@
 module XDG.BaseDirectory.IO
   ( User (..),
     Aggregate (..),
+    AggregateDirWarnings,
     IOWriteMode (..),
-    Target (..),
     InvalidRuntimeDir (..),
-    FileError (..),
-    WriteError (..),
+    SystemDirWarnings,
     withUserFile,
     withUserFileRO,
-    withTargetFile,
+    withUserTargetFile,
+    withSystemTargetFile,
     withExecutableFile,
     withAggregateFiles,
     withRuntimeFile,
@@ -68,50 +68,46 @@ module XDG.BaseDirectory.IO
 
     -- * utilities
     consAggregate,
-    consAggregate',
   )
 where
 
-import "base" Control.Applicative (liftA2, pure)
-import "base" Control.Category (id, (.))
-import "base" Control.Monad (Monad, join, (<=<), (=<<))
-import "base" Control.Monad.IO.Class (MonadIO, liftIO)
-import "base" Data.Bifunctor (first)
-import "base" Data.Bool (Bool (False), bool)
-import "base" Data.Either (Either (Left), either)
-import "base" Data.Eq (Eq)
-import "base" Data.Foldable (Foldable, foldr, toList)
-import "base" Data.Function (flip, ($))
-import "base" Data.Functor (Functor, fmap, (<$), (<$>))
-import "base" Data.Functor.Compose (Compose (Compose), getCompose)
-import qualified "base" Data.Kind as Kind
-import "base" Data.List.NonEmpty (NonEmpty, nonEmpty)
-import qualified "base" Data.List.NonEmpty as NonEmpty
-import "base" Data.Maybe (Maybe (Nothing), maybe)
-import "base" Data.Monoid (mempty)
-import "base" Data.Ord (Ord)
-import "base" Data.Semigroup (Semigroup, (<>))
-import "base" Data.Traversable (Traversable, traverse)
-import "base" Data.Tuple (curry, uncurry)
-import "base" Data.Word (Word16)
-import "base" GHC.Generics (Generic, Generic1)
-import "base" System.IO (Handle, IO, IOMode)
-import qualified "base" System.IO as IO
-import "base" System.IO.Error (IOError)
-import "base" Text.Read (Read)
-import "base" Text.Show (Show)
-import "exceptions" Control.Monad.Catch (MonadMask, try)
-import "pathway" Data.Path (Path, Relativity (Rel), Type (File), (</>))
-import qualified "pathway" Data.Path.Directory as Directory
-import qualified "pathway" Data.Path.File as File
-import qualified "pathway-system" Filesystem.Path as Dir
-import "these" Data.These (These (That, These, This))
-import "transformers" Control.Monad.Trans.Class (lift)
-import "transformers" Control.Monad.Trans.Except (ExceptT (ExceptT), runExceptT)
-import qualified "xdg-base-directory-internal" Data.Path.Patch as Patch
-import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
-import "this" Data.Annotated (Annotated (NotBut, Noted), annotated)
-import "this" XDG.BaseDirectory
+import safe "base" Control.Applicative (liftA2, pure)
+import safe "base" Control.Category ((.))
+import safe "base" Control.Monad (join, (<=<), (=<<))
+import safe "base" Control.Monad.IO.Class (MonadIO, liftIO)
+import safe "base" Data.Bifunctor (first)
+import safe "base" Data.Bool (Bool (False), bool)
+import safe "base" Data.Either (Either (Left), either)
+import safe "base" Data.Eq (Eq)
+import safe "base" Data.Foldable (Foldable, foldr, toList)
+import safe "base" Data.Function (($))
+import safe "base" Data.Functor (Functor, fmap, (<$>))
+import safe "base" Data.Functor.Compose (Compose (Compose), getCompose)
+import safe qualified "base" Data.Kind as Kind
+import safe "base" Data.List.NonEmpty (NonEmpty)
+import safe qualified "base" Data.List.NonEmpty as NonEmpty
+import safe "base" Data.Maybe (Maybe (Nothing))
+import safe "base" Data.Ord (Ord)
+import safe "base" Data.Traversable (Traversable, sequenceA, traverse)
+import safe "base" Data.Tuple (curry, uncurry)
+import safe "base" Data.Word (Word16)
+import safe "base" GHC.Generics (Generic, Generic1)
+import safe "base" System.IO (Handle, IO, IOMode)
+import safe qualified "base" System.IO as IO
+import safe "base" Text.Read (Read)
+import safe "base" Text.Show (Show)
+import safe "exceptions" Control.Monad.Catch (MonadMask)
+import safe "pathway" Data.Path (Path, Relativity (Abs, Rel), Type (Dir, File), (</>))
+import safe qualified "pathway" Data.Path.Directory as Directory
+import safe qualified "pathway" Data.Path.File as File
+import safe qualified "pathway-system" System.Path as Path
+import safe qualified "pathway-system" System.Text as Text
+import safe "these" Data.These (These (That, These, This))
+import "variant" Data.Variant (V, liftVariant, toVariant, (:<))
+import "variant" Data.Variant.Types (Concat)
+import safe "yaya" Yaya.Pattern (AndMaybe (Indeed, Only))
+import safe "this" Data.Annotated (Annotated (NotBut, Noted))
+import safe "this" XDG.BaseDirectory
   ( binHome,
     cacheHome,
     configDirs,
@@ -123,7 +119,7 @@ import "this" XDG.BaseDirectory
     stateHome,
     sysconfdir,
   )
-import "this" XDG.BaseDirectory.Internal (BaseDirectory, Error, weakenEither)
+import safe "this" XDG.BaseDirectory.Internal (BaseDirectory, Error, VarError)
 
 -- $setup
 -- >>> :seti -XQuasiQuotes
@@ -132,20 +128,22 @@ import "this" XDG.BaseDirectory.Internal (BaseDirectory, Error, weakenEither)
 -- >>> import "base" Control.Monad (join)
 -- >>> import "base" Data.Bool (Bool (True))
 -- >>> import "base" Data.Function (const)
+-- >>> import "base" Data.String (String)
+-- >>> import "base" Data.Tuple (snd)
 -- >>> import "base" System.Environment (setEnv)
--- >>> import "directory" System.Directory (createDirectoryIfMissing)
--- >>> import "filepath" System.FilePath (FilePath, (</>))
--- >>> import qualified "filepath" System.FilePath as FP
+-- >>> import "pathway" Data.Path (toText)
 -- >>> import "pathway" Data.Path.TH (posix)
--- >>> import "temporary" System.IO.Temp (createTempDirectory, getCanonicalTemporaryDirectory)
+-- >>> import qualified "pathway" Data.Path.Format as Format
+-- >>> import "pathway-compat-temporary" System.IO.Temp.Overlay (createTempDirectory, getCanonicalTemporaryDirectory)
+-- >>> import "pathway-system" System.Path (createDirectoryWithParentsIfMissing)
 --
 -- __TODO__: Extract this to a testing package.
--- __TODO__: Replace all this directory/filepath/temporary stuff with Pathway.
--- >>> tempDir <- getCanonicalTemporaryDirectory
--- >>> tempRoot <- createTempDirectory tempDir "xdg-base-directory"
--- >>> tempHome = tempRoot FP.</> "home" FP.</> "example-user"
--- >>> createDirectoryIfMissing True tempHome
--- >>> setEnv "HOME" tempHome
+-- >>> tempBase <- getCanonicalTemporaryDirectory
+-- >>> tempRoot <- createTempDirectory tempBase "xdg-base-directory-haskell-doctest"
+-- >>> tempHome = tempRoot </> [posix|home/example-user/|]
+-- >>> createDirectoryWithParentsIfMissing tempHome
+-- Right ()
+-- >>> setEnv "HOME" $ toText Format.local tempHome
 
 -- | The types of file that live /only/ in the user’s home directory and can be
 --   read & written arbitrarily.
@@ -153,7 +151,13 @@ data User = Cache | State
   deriving stock (Eq, Generic, Ord, Read, Show)
 
 resolveUser ::
-  (System.Rep rep) => User -> IO (These (NonEmpty Error) (BaseDirectory rep))
+  (Path.Rep rep, Text.Rep rep) =>
+  User ->
+  IO
+    ( Either
+        (Error rep, V (Path.GetUserDirectoryFailure rep))
+        (Annotated (Error rep) (BaseDirectory rep))
+    )
 resolveUser = \case
   Cache -> cacheHome
   State -> stateHome
@@ -167,55 +171,69 @@ resolveUser = \case
 data Aggregate = Config | Data
   deriving stock (Eq, Generic, Ord, Read, Show)
 
-consAggregate' ::
-  Either e a ->
-  Annotated (NonEmpty e) (NonEmpty a) ->
-  Annotated (NonEmpty e) (NonEmpty a)
-consAggregate' =
-  either
-    (\e -> annotated (Noted $ pure e) $ Noted . NonEmpty.cons e)
-    ( \a -> annotated (NotBut . NonEmpty.cons a) $ \es ->
-        Noted es . NonEmpty.cons a
-    )
+type SystemDirWarnings (rep :: Kind.Type) =
+  V '[VarError, [Error rep]] :: Kind.Type
+
+-- | `This` implies a failure to get the user directory, and `That` means
+--   there was some failure in getting the system directories (but there’s
+--   always at least one system directory, even if we had to reach for the
+--   defaults).
+type AggregateDirWarnings (rep :: Kind.Type) =
+  These
+    -- failed to get the user directory
+    (Error rep `AndMaybe` V (Path.GetUserDirectoryFailure rep))
+    (SystemDirWarnings rep) ::
+    Kind.Type
 
 consAggregate ::
-  These (NonEmpty e) a ->
-  Annotated (NonEmpty e) (NonEmpty a) ->
-  Annotated (NonEmpty e) (NonEmpty a)
-consAggregate = \case
-  This es -> annotated (Noted es) (Noted . (es <>))
-  That a ->
-    annotated (NotBut . NonEmpty.cons a) $ \es -> Noted es . NonEmpty.cons a
-  These es a ->
-    annotated (Noted es . NonEmpty.cons a) $ \es' ->
-      Noted (es <> es') . NonEmpty.cons a
-
-weakenAnnotated :: Annotated a b -> These a b
-weakenAnnotated = annotated That These
+  Either
+    (Error rep, V (Path.GetUserDirectoryFailure rep))
+    (Annotated (Error rep) (BaseDirectory rep)) ->
+  Annotated (SystemDirWarnings rep) (NonEmpty (BaseDirectory rep)) ->
+  Annotated (AggregateDirWarnings rep) (NonEmpty (BaseDirectory rep))
+consAggregate =
+  either
+    ( \e -> \case
+        NotBut dirs -> Noted (This $ uncurry Indeed e) dirs
+        Noted e' dirs -> Noted (These (uncurry Indeed e) e') dirs
+    )
+    ( curry \case
+        (NotBut dir, NotBut dirs) -> NotBut $ NonEmpty.cons dir dirs
+        (NotBut dir, Noted e' dirs) -> Noted (That e') $ NonEmpty.cons dir dirs
+        (Noted e dir, NotBut dirs) ->
+          Noted (This $ Only e) $ NonEmpty.cons dir dirs
+        (Noted e dir, Noted e' dirs) ->
+          Noted (These (Only e) e') $ NonEmpty.cons dir dirs
+    )
 
 resolveAggregate ::
-  (System.Rep rep) =>
+  (Path.Rep rep, Text.Rep rep) =>
   Aggregate ->
-  IO (Annotated (NonEmpty Error) (NonEmpty (BaseDirectory rep)))
+  IO (Annotated (AggregateDirWarnings rep) (NonEmpty (BaseDirectory rep)))
 resolveAggregate =
   uncurry (liftA2 consAggregate) . \case
     Config -> (configHome, configDirs)
     Data -> (dataHome, dataDirs)
 
-data Target = System | User
-  deriving stock (Eq, Generic, Ord, Read, Show)
-
-resolveTarget ::
-  (System.Rep rep) =>
-  Target ->
+resolveUserAggregate ::
+  (Path.Rep rep, Text.Rep rep) =>
   Aggregate ->
-  IO (These (NonEmpty Error) (BaseDirectory rep))
-resolveTarget =
-  curry \case
-    (System, Config) -> annotated pure (These . pure) <$> sysconfdir
-    (System, Data) -> annotated pure (These . pure) <$> datadir
-    (User, Config) -> configHome
-    (User, Data) -> dataHome
+  IO
+    ( Either
+        (Error rep, V (Path.GetUserDirectoryFailure rep))
+        (Annotated (Error rep) (BaseDirectory rep))
+    )
+resolveUserAggregate = \case
+  Config -> configHome
+  Data -> dataHome
+
+resolveSystemAggregate ::
+  (Path.Rep rep, Text.Rep rep) =>
+  Aggregate ->
+  IO (Annotated (Error rep) (BaseDirectory rep))
+resolveSystemAggregate = \case
+  Config -> sysconfdir
+  Data -> datadir
 
 -- | This effectively checks some input against a function, and then returns the
 --   input (in the correct context if it worked).
@@ -310,11 +328,11 @@ type role InvalidRuntimeDir representational
 -- * must be on local file system
 -- * must be “fully-featured”
 verifyRuntimeDir ::
-  (System.Rep rep, Ord rep) =>
+  (Path.Operations rep 'Dir) =>
   BaseDirectory rep ->
   IO (Either (InvalidRuntimeDir rep) ())
 verifyRuntimeDir dir =
-  bool (Left InvalidLifetime) (pure ()) <$> Patch.doesDirectoryExist dir
+  bool (Left InvalidLifetime) (pure ()) <$> Path.doesExist dir
 
 -- |
 --
@@ -328,75 +346,70 @@ verifyRuntimeDir dir =
 --
 --       —[§4](https://specifications.freedesktop.org/basedir-spec/latest/#referencing)
 withFile ::
-  (MonadIO m, MonadMask m, System.Rep rep, Ord rep) =>
+  (MonadIO m, MonadMask m, Path.Rep rep) =>
   Path ('Rel 'False) 'File rep ->
   IOWriteMode ->
-  (Handle -> m a) ->
+  (Path 'Abs 'File rep -> Handle -> m a) ->
   BaseDirectory rep ->
-  ExceptT Dir.MaybeParentCreationFailure m (Either IOError a)
-withFile filename mode action base = do
+  m (Either (V Path.MaybeParentCreationFailure) a)
+withFile filename mode action base =
   let filepath = base </> filename
-  ExceptT . liftIO . runExceptT . Patch.createDirectoryWithParentsIfMissing $
-    File.directory filepath
-  lift . try $ Patch.withFile filepath (resolveIOWriteMode mode) action
+   in traverse (\() -> Path.withFile filepath (resolveIOWriteMode mode) $ action filepath)
+        <=< liftIO . Path.createDirectoryWithParentsIfMissing
+        $ File.directory filepath
 
 withFileRO ::
-  (MonadIO m, MonadMask m, System.Rep rep, Ord rep) =>
+  (MonadIO m, MonadMask m, Path.Rep rep) =>
   Path ('Rel 'False) 'File rep ->
-  (Handle -> m a) ->
+  (Path 'Abs 'File rep -> Handle -> m a) ->
   BaseDirectory rep ->
-  m (Either IOError a)
-withFileRO filename =
-  ((try .) .) . flip $ flip Patch.withFile IO.ReadMode . (</> filename)
+  m a
+withFileRO filename action base =
+  let filepath = base </> filename
+   in Path.withFile filepath IO.ReadMode $ action filepath
 
 -- |
 --
 -- >>> :{
---   runExceptT $
---     withUserFile @IO @FilePath
---       State
---       [posix|myprogram/archive.db|]
---       ReadWriteMode
---       pure
+--   withUserFile @IO @String
+--     State
+--     [posix|myprogram/archive.db|]
+--     ReadWriteMode
+--     $ const pure
 -- :}
--- Right (These (FileError (ConstructionError (Var (...Var "XDG_STATE_HOME"...)) :| []) {handle: .../home/example-user/.local/state/myprogram/archive.db})
+-- Right (These (FileError (ConstructionError (Var (...Var "XDG_STATE_HOME"...)) :| []) {handle: /.../home/example-user/.local/state/myprogram/archive.db})
 withUserFile ::
-  (MonadIO m, MonadMask m, System.Rep rep, Ord rep) =>
+  (MonadIO m, MonadMask m, Path.Rep rep, Text.Rep rep) =>
   User ->
   Path ('Rel 'False) 'File rep ->
   IOWriteMode ->
-  (Handle -> m a) ->
-  ExceptT
-    Dir.MaybeParentCreationFailure
-    m
-    (These (NonEmpty (WriteError rep)) a)
+  (Path 'Abs 'File rep -> Handle -> m a) ->
+  m (Either (V ((Error rep, V (Path.GetUserDirectoryFailure rep)) ': Path.MaybeParentCreationFailure)) (Annotated (Error rep) a))
 withUserFile user filename mode action =
-  fmap joinThese
+  fmap join
     . traverse
-      ( fmap (weakenEither . first (pure . CreationFailure))
-          . withFile filename mode action
-      )
-    . first (FileError . ConstructionError <$>)
+      (fmap (first liftVariant . sequenceA) . traverse (withFile filename mode action))
+    . first toVariant
     <=< liftIO
     $ resolveUser user
 
 -- |
 --
--- >>> withUserFileRO @IO @FilePath State [posix|myprogram/archive.db|] pure
+-- >>> withUserFileRO @IO @String State [posix|myprogram/archive.db|] $ const pure
 -- This (ConstructionError (Var (...Var "XDG_STATE_HOME"...) :| [IOError .../home/example-user/.local/state/myprogram/archive.db: openFile: does not exist (No such file or directory)])
 withUserFileRO ::
-  (MonadIO m, MonadMask m, System.Rep rep, Ord rep) =>
+  (MonadIO m, MonadMask m, Path.Rep rep, Text.Rep rep) =>
   User ->
   Path ('Rel 'False) 'File rep ->
-  (Handle -> m a) ->
-  m (These (NonEmpty (FileError rep)) a)
+  (Path 'Abs 'File rep -> Handle -> m a) ->
+  m
+    ( Either
+        (Error rep, V (Path.GetUserDirectoryFailure rep))
+        (Annotated (Error rep) a)
+    )
 withUserFileRO user filename action =
-  fmap joinThese
-    . traverse
-      ( fmap (weakenEither . first (pure . IOError))
-          . withFileRO filename action
-      )
-    <=< liftIO . fmap (first $ fmap ConstructionError)
+  traverse (traverse $ withFileRO filename action)
+    <=< liftIO
     $ resolveUser user
 
 -- | Open all of the associated files.
@@ -413,22 +426,22 @@ withUserFileRO user filename action =
 --        —[§4](https://specifications.freedesktop.org/basedir-spec/0.8/#referencing)
 --
 -- >>> :{
---   withAggregateFiles @IO @FilePath
+--   withAggregateFiles @IO @String
 --     Config
 --     [posix|myprogram/settings.dhall|]
---     pure
+--     $ pure . fmap snd
 -- :}
 -- This [ConstructionError (Var (...Var "XDG_CONFIG_HOME"...),ConstructionError (Var (MissingVar "XDG_CONFIG_DIRS" Nothing)),IOError .../home/example-user/.config/myprogram/settings.dhall: openFile: does not exist (No such file or directory),IOError /etc/xdg/myprogram/settings.dhall: openFile: does not exist (No such file or directory)]
 --
 -- >>> :{
---   withAggregateFiles @IO @FilePath
+--   withAggregateFiles @IO @String
 --     Data
 --     [posix|myprogram/resources/splash.png|]
---     pure
+--     $ pure . fmap snd
 -- :}
 -- This [ConstructionError (Var (...Var "XDG_DATA_HOME"...),ConstructionError (Var (...Var "XDG_DATA_DIRS"...),IOError .../home/example-user/.local/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory),IOError /usr/local/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory),IOError /usr/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory)]
 withAggregateFiles ::
-  (MonadIO m, MonadMask m, System.Rep rep, Ord rep) =>
+  (MonadIO m, MonadMask m, Path.Rep rep, Text.Rep rep) =>
   -- | What kinds of files we are reading.
   Aggregate ->
   -- | Path to the desired file, relative to the project prefixes.
@@ -436,13 +449,17 @@ withAggregateFiles ::
   -- | An action that is given the list of handles we are reading from. The
   --   handles are in order of decreasing importance, so the ones after the
   --   first can be dropped, or otherwise have earlier ones layered on them.
-  (NonEmpty Handle -> m a) ->
-  m (These [FileError rep] a)
+  ([(Path 'Abs 'File rep, Handle)] -> m a) ->
+  m
+    ( Annotated
+        ( These
+            (Error rep `AndMaybe` V (Path.GetUserDirectoryFailure rep))
+            (V '[VarError, [Error rep]])
+        )
+        a
+    )
 withAggregateFiles aggregate filename action =
-  fmap joinThese
-    . traverse (fmap (first (IOError <$>)) . foldDirs filename action)
-    . first (toList . fmap ConstructionError)
-    . weakenAnnotated
+  traverse (foldDirs filename action . toList)
     <=< liftIO
     $ resolveAggregate aggregate
 
@@ -453,45 +470,62 @@ withAggregateFiles aggregate filename action =
 --            isn’t in the the corresponding aggregate list (@XDG_DATA_DIRS@ or
 --            @XDG_CONFIG_DIRS@, respectively).
 --
--- >>> runExceptT $ withTargetFile @IO @FilePath User Config [posix|myprogram/settings.dhall|] False pure
--- Right (These (FileError (ConstructionError (Var (...Var "XDG_CONFIG_HOME"...)) :| []) {handle: .../home/example-user/.config/myprogram/settings.dhall})
-withTargetFile ::
-  (MonadIO m, MonadMask m, System.Rep rep, Ord rep) =>
-  Target ->
+-- >>> withUserTargetFile @IO @String Config [posix|myprogram/settings.dhall|] False $ const pure
+-- Right (These (FileError (ConstructionError (Var (...Var "XDG_CONFIG_HOME"...)) :| []) {handle: /.../home/example-user/.config/myprogram/settings.dhall})
+withUserTargetFile ::
+  (MonadIO m, MonadMask m, Path.Rep rep, Text.Rep rep) =>
   Aggregate ->
   Path ('Rel 'False) 'File rep ->
   Bool ->
-  (Handle -> m a) ->
-  ExceptT
-    Dir.MaybeParentCreationFailure
-    m
-    (These (NonEmpty (WriteError rep)) a)
-withTargetFile target aggregate filename truncate action =
-  fmap joinThese
+  (Path 'Abs 'File rep -> Handle -> m a) ->
+  m
+    ( Either
+        ( V
+            ( (Error rep, V (Path.GetUserDirectoryFailure rep))
+                ': Path.MaybeParentCreationFailure
+            )
+        )
+        (Annotated (Error rep) a)
+    )
+withUserTargetFile aggregate filename truncate action =
+  fmap join
     . traverse
-      ( fmap (weakenEither . first (pure . CreationFailure))
-          . withFile
-            filename
-            (if truncate then WriteMode else AppendMode)
-            action
+      ( fmap (first liftVariant . sequenceA)
+          . traverse
+            ( withFile
+                filename
+                (if truncate then WriteMode else AppendMode)
+                action
+            )
       )
-    . first (FileError . ConstructionError <$>)
+    . first toVariant
     <=< liftIO
-    $ resolveTarget target aggregate
+    $ resolveUserAggregate aggregate
+
+withSystemTargetFile ::
+  (MonadIO m, MonadMask m, Path.Rep rep, Text.Rep rep) =>
+  Aggregate ->
+  Path ('Rel 'False) 'File rep ->
+  Bool ->
+  (Path 'Abs 'File rep -> Handle -> m a) ->
+  m (Annotated (Error rep) (Either (V Path.MaybeParentCreationFailure) a))
+withSystemTargetFile aggregate filename truncate action =
+  traverse
+    (withFile filename (if truncate then WriteMode else AppendMode) action)
+    <=< liftIO
+    $ resolveSystemAggregate aggregate
 
 -- | This unifies the complex @XDG_RUNTIME_FILE@ handling, which is then exposed
 --   via two different functions.
 --
 -- * toggle sticky bit when we open/close
 withRuntimeFile' ::
-  (MonadIO m, Monad m', System.Rep rep, Ord rep) =>
-  (forall x. m x -> m' x) ->
+  (MonadIO m, Path.Rep rep, Path.Operations rep 'Dir, Text.Rep rep, InvalidRuntimeDir rep :< w) =>
   ( Path ('Rel 'False) 'File rep ->
-    (Handle -> m a) ->
+    (Path 'Abs 'File rep -> Handle -> m a) ->
     BaseDirectory rep ->
-    m' (Either IOError a)
+    m (Either (V w) a)
   ) ->
-  (FileError rep -> w) ->
   -- | This function sets the sticky bit on any created file while it’s
   --   operating. If this is `True`, it will leave the sticky bit set to avoid
   --   cleanup. If it’s `False`, it will unset the sticky bit even if the file
@@ -503,59 +537,34 @@ withRuntimeFile' ::
   --            periodically.
   Maybe Bool ->
   Path ('Rel 'False) 'File rep ->
-  -- | A fallback directory to use if @$XDG_RUNTIME_DIR@ isn’t set. If this is
-  --   `Nothing`, then @$XDG_RUNTIME_DIR@ being unset results in an error
-  --   instead of a warning.
-  --
-  --       If @$XDG_RUNTIME_DIR@ is not set applications should fall back to a
-  --       replacement directory with similar capabilities and print a warning
-  --       message.
-  --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
-  Maybe (BaseDirectory rep) ->
   -- | Produce a warning to be presented to the user when @XDG_RUNTIME_DIR@
-  --   isn’t set.
+  --   isn’t set. A fallback directory to use if @$XDG_RUNTIME_DIR@ isn’t set. If this is
+  --   `Nothing`, then @$XDG_RUNTIME_DIR@ being unset results in an error
+  --   instead of a warning
   --
   --       If @$XDG_RUNTIME_DIR@ is not set applications should fall back to a
   --       replacement directory with similar capabilities and print a warning
   --       message.
   --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
-  (Error -> m ()) ->
-  (Handle -> m a) ->
-  m' (These (NonEmpty (Either (InvalidRuntimeDir rep) w)) a)
-withRuntimeFile' lift' wf liftErr _preserve filename fallback warning action =
-  ( fmap joinThese
-      . traverse
-        ( fmap (weakenEither . first (pure . pure . liftErr . IOError))
-            . wf filename \handle -> do
+  (Error rep -> m (BaseDirectory rep)) ->
+  (Path 'Abs 'File rep -> Handle -> m a) ->
+  m (Either (V w) a)
+withRuntimeFile' withFile' _preserve filename fallback action =
+  ( ( fmap join
+        . traverse
+          ( withFile' filename \handle -> do
               -- prevStickyBit <- casStickyBit handle True
               action handle
               -- maybe
               --   (setStickyBit handle prevStickyBit)
               --   (bool (setStickyBit handle False) $ pure ())
               --   preserve
-        )
-      . joinThese
-      <=< lift'
-        . ( traverse
-              -- TODO: This should warn if we’re only reading the file (or is that not
-              --       good enough?)
-              ( fmap (weakenEither . first (pure . Left))
-                  . getCompose
-                  . tracing (Compose . liftIO . verifyRuntimeDir)
-              )
-              <=< either
-                ( \e ->
-                    maybe
-                      (This . pure . pure . liftErr $ ConstructionError e)
-                      (These . pure . pure . liftErr $ ConstructionError e)
-                      fallback
-                      <$ warning e
-                )
-                (pure . pure)
           )
+    )
+      <=< getCompose . tracing (Compose . liftIO . fmap (first toVariant) . verifyRuntimeDir)
+      <=< either fallback pure
   )
-    <=< lift'
-    $ liftIO runtimeDir
+    =<< liftIO runtimeDir
 
 -- |
 --
@@ -594,72 +603,64 @@ withRuntimeFile' lift' wf liftErr _preserve filename fallback warning action =
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
 --
 -- >>> :{
---   runExceptT $
---     withRuntimeFile @IO @FilePath
---       [posix|myprogram/super-secret.age|]
---       ReadWriteMode
---       Nothing
---       (pure [posix|/run/whatever/|])
---       (const $ pure ())
---       pure
+--   withRuntimeFile @IO @String
+--     [posix|myprogram/super-secret.age|]
+--     ReadWriteMode
+--     Nothing
+--     (const $ pure [posix|/run/whatever/|])
+--     $ const pure
 -- :}
--- Right (This (Right (FileError (ConstructionError (Var (...Var "XDG_RUNTIME_DIR"...))) :| [Left InvalidLifetime]))
+-- Right {handle: /.../myprogram/super-secret.age}
 withRuntimeFile ::
-  (MonadIO m, MonadMask m, System.Rep rep, Ord rep) =>
+  (MonadIO m, MonadMask m, Path.Rep rep, Path.Operations rep 'Dir, Text.Rep rep) =>
   Path ('Rel 'False) 'File rep ->
   IOWriteMode ->
   Maybe Bool ->
-  Maybe (BaseDirectory rep) ->
-  (Error -> m ()) ->
-  (Handle -> m a) ->
-  ExceptT
-    Dir.MaybeParentCreationFailure
-    m
-    (These (NonEmpty (Either (InvalidRuntimeDir rep) (WriteError rep))) a)
+  (Error rep -> m (BaseDirectory rep)) ->
+  (Path 'Abs 'File rep -> Handle -> m a) ->
+  m (Either (V (InvalidRuntimeDir rep ': Path.MaybeParentCreationFailure)) a)
 withRuntimeFile filename mode preserve =
-  withRuntimeFile' lift (`withFile` mode) FileError preserve filename
+  withRuntimeFile'
+    (\fn handle -> fmap (first liftVariant) . withFile fn mode handle)
+    preserve
+    filename
 
 -- |
 --
 -- >>> :{
---   withRuntimeFileRO @IO @FilePath
+--   withRuntimeFileRO @IO @String
 --     [posix|myprogram/super-secret.age|]
---     (pure [posix|/run/whatever/|])
---     (const $ pure ())
---     pure
+--     (const $ pure [posix|/run/whatever/|])
+--     $ const pure
 -- :}
--- This (Right (ConstructionError (Var (...Var "XDG_RUNTIME_DIR"...)) :| [Left InvalidLifetime])
+-- Right {handle: /.../myprogram/super-secret.age}
 withRuntimeFileRO ::
-  (MonadIO m, MonadMask m, System.Rep rep, Ord rep) =>
+  (MonadIO m, MonadMask m, Path.Rep rep, Path.Operations rep 'Dir, Text.Rep rep) =>
   Path ('Rel 'False) 'File rep ->
-  Maybe (BaseDirectory rep) ->
-  (Error -> m ()) ->
-  (Handle -> m a) ->
-  m (These (NonEmpty (Either (InvalidRuntimeDir rep) (FileError rep))) a)
-withRuntimeFileRO = withRuntimeFile' id withFileRO id Nothing
+  (Error rep -> m (BaseDirectory rep)) ->
+  (Path 'Abs 'File rep -> Handle -> m a) ->
+  m (Either (V '[InvalidRuntimeDir rep]) a)
+withRuntimeFileRO =
+  withRuntimeFile' (\fn handle -> fmap pure . withFileRO fn handle) Nothing
 
 -- | Apply an action to the same file in each directory.
 foldDirs ::
-  (MonadIO m, MonadMask m) =>
-  (System.Rep rep, Ord rep) =>
+  (MonadIO m, MonadMask m, Path.Rep rep) =>
   Path ('Rel 'False) 'File rep ->
-  (NonEmpty Handle -> m a) ->
-  NonEmpty (BaseDirectory rep) ->
+  ([(Path 'Abs 'File rep, Handle)] -> m a) ->
+  [BaseDirectory rep] ->
   -- |
   --
   --  __FIXME__: Rewrite this so we have a @`These` (`NonEmpty` `IOError`)@ at the end.
-  m (These [IOError] a)
+  m a
 foldDirs filename action dirs =
   foldr
-    ( \dir act others ->
-        either (\ioe -> joinThese . These (pure ioe) <$> act others) pure
-          =<< withFileRO filename (act . (: others)) dir
-    )
-    (maybe (pure $ This mempty) (fmap pure . action) . nonEmpty)
+    (\dir act others -> withFileRO filename (\p -> act . (: others) . (p,)) dir)
+    action
     dirs
     []
 
--- | Executables can only be written, not read. To _find_ an executable, you
+-- | Executables can only be written, not read. To /find/ an executable, you
 --   should check the @PATH@ environment variable.
 --
 --       User-specific executable files may be stored in @$HOME@/.local/bin.
@@ -667,67 +668,43 @@ foldDirs filename action dirs =
 --       environment variable, at an appropriate place.
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
 --
--- >>> runExceptT $ withExecutableFile "some-script.sh" True pure
--- Right (NotBut (Right {handle: .../home/example-user/.local/bin/some-script.sh}))
+-- >>> withExecutableFile "some-script.sh" True $ const pure
+-- NotBut (Right {handle: /.../home/example-user/.local/bin/some-script.sh})
 withExecutableFile ::
-  (MonadIO m, MonadMask m, System.Rep rep, Ord rep) =>
+  (MonadIO m, MonadMask m, Path.Rep rep, Text.Rep rep) =>
   -- | The name of the executable to write.
   rep ->
   -- | Whether the file should be truncated (`True` → `IO.WriteMode`,
   --   `False` → `IO.AppendMode`).
   Bool ->
-  (Handle -> m a) ->
+  (Path 'Abs 'File rep -> Handle -> m a) ->
   -- | Returns @`Noted` ()@ if @$HOME/.local/bin/@ isn’t on @PATH@.
-  ExceptT
-    Dir.MaybeParentCreationFailure
-    m
-    (Annotated () (Either (FileError rep) a))
+  m
+    ( Annotated
+        ()
+        ( Either
+            ( V
+                ( Concat
+                    Path.MaybeParentCreationFailure
+                    (Path.GetUserDirectoryFailure rep)
+                )
+            )
+            a
+        )
+    )
 withExecutableFile filename truncate action =
   -- TODO: Ensure the file is actually executable
   -- TODO: Warn if `binHome` isn’t on Path
   fmap (pure . join) $
     traverse
-      ( fmap (first IOError)
+      ( fmap (first liftVariant)
           . withFile
             (Directory.selectFile Directory.current filename)
             (if truncate then WriteMode else AppendMode)
             action
       )
-      . first ConstructionError
+      . first liftVariant
       =<< liftIO binHome
-
--- |
---
---  __NB__: This is lacking `Ord` and `Read` instances because `IOError` is
---          missing them.
-data FileError (rep :: Kind.Type)
-  = ConstructionError Error
-  | IOError IOError
-  deriving stock (Eq, Generic, Show)
-  deriving stock (Foldable, Functor, Generic1, Traversable)
-
-type role FileError representational
-
--- |
---
---  __NB__: This is lacking `Ord` and `Read` instances because `IOError` is
---          missing them.
-data WriteError (rep :: Kind.Type)
-  = FileError (FileError rep)
-  | CreationFailure IOError
-  deriving stock (Eq, Generic, Show)
-  deriving stock (Foldable, Functor, Generic1, Traversable)
-
-type role WriteError representational
-
--- | Why is there no `Monad` for `These`?
-joinThese :: (Semigroup a) => These a (These a b) -> These a b
-joinThese = \case
-  This a -> This a
-  That t -> t
-  These a (This a') -> This $ a <> a'
-  These a (That b) -> These a b
-  These a (These a' b) -> These (a <> a') b
 
 -- | `IOMode`, but restricted to modes that involve writing.
 data IOWriteMode = WriteMode | AppendMode | ReadWriteMode

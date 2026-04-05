@@ -10,7 +10,8 @@
 -- (which [Cabal allows you to
 -- override](https://cabal.readthedocs.io/en/stable/cabal-package-description-file.html#accessing-data-files-from-package-code)).
 module XDG.BaseDirectory.Custom
-  ( dataHome,
+  ( module XDG.BaseDirectory.Internal,
+    dataHome,
     configHome,
     stateHome,
     cacheHome,
@@ -24,54 +25,50 @@ module XDG.BaseDirectory.Custom
   )
 where
 
-import safe "base" Control.Applicative (pure)
 import safe "base" Control.Category ((.))
 import safe "base" Control.Monad ((<=<), (=<<))
 import safe "base" Data.Bifunctor (first)
-import safe "base" Data.Either (Either)
-import safe "base" Data.Function (($))
-import safe "base" Data.Functor (fmap)
-import safe "base" Data.List.NonEmpty (NonEmpty, nonEmpty)
-import safe "base" Data.Maybe (maybe)
+import safe "base" Data.Either (Either (Left), either)
+import safe "base" Data.Functor (fmap, (<$>))
 import safe "base" System.IO (IO)
-import safe "these" Data.These (These (This), partitionEithersNE)
-import safe qualified "xdg-base-directory-internal" Data.Path.Patch as Patch
-import safe qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
+import safe "pathway-compat-base" Common (InternalFailure (ParseFailure))
+import safe qualified "pathway-system" System.Path as Path
+import safe qualified "pathway-system" System.Text as Text
 import qualified "this" Paths_xdg_base_directory as Make
 import safe "this" XDG.BaseDirectory.Internal
   ( BaseDirectory,
-    Error (NoDirectoriesFound, Var),
+    Error (Pathway, Var),
+    VarError,
     extractAbs,
-    weakenEither,
   )
 import safe qualified "this" XDG.BaseDirectory.Var as Var
 
-parseDir :: (System.Rep rep) => rep -> Either Error (BaseDirectory rep)
-parseDir = extractAbs . Patch.parseDirectory
+parseDir :: (Path.Rep rep) => rep -> Either (Error rep) (BaseDirectory rep)
+parseDir =
+  either (Left . Pathway . ParseFailure) extractAbs
+    . Path.parseDirectory
 
 get ::
-  (System.Rep rep) =>
-  Var.EnvironmentVariable -> IO (Either Error (BaseDirectory rep))
+  (Path.Rep rep, Text.Rep rep) =>
+  Var.EnvironmentVariable -> IO (Either (Error rep) (BaseDirectory rep))
 get = fmap (parseDir <=< first Var) . Var.lookupNonEmptyEnv
 
 getMultiple ::
-  (System.Rep rep) =>
+  (Path.Rep rep, Text.Rep rep) =>
   Var.EnvironmentVariable ->
-  IO (These (NonEmpty Error) (NonEmpty (BaseDirectory rep)))
+  -- | The outer `Left` represents failures due to the variable, and the inner
+  --   ones represent failures for each path found in the varaible.
+  IO (Either VarError [Either (Error rep) (BaseDirectory rep)])
 getMultiple =
-  fmap
-    ( maybe (This $ pure NoDirectoriesFound) (partitionEithersNE . fmap parseDir)
-        . nonEmpty
-        . System.splitSearchPath
-        <=< weakenEither . first (pure . Var)
-    )
+  fmap (fmap (either (Left . Pathway) extractAbs) . Path.splitSearchPath <$>)
     . Var.lookupNonEmptyEnv
 
 dataHome,
   configHome,
   stateHome,
-  cacheHome ::
-    (System.Rep rep) => IO (Either Error (BaseDirectory rep))
+  cacheHome,
+  runtimeDir ::
+    (Path.Rep rep, Text.Rep rep) => IO (Either (Error rep) (BaseDirectory rep))
 
 -- |
 --
@@ -105,10 +102,52 @@ stateHome = get Var.stateHome
 --       —[§2](https://specifications.freedesktop.org/basedir-spec/latest/#basics)
 cacheHome = get Var.cacheHome
 
+-- |
+--
+--        There is a single base directory relative to which user-specific
+--       runtime files and other file objects should be placed. This directory
+--       is defined by the environment variable @$XDG_RUNTIME_DIR@.
+--       —[§2](https://specifications.freedesktop.org/basedir-spec/latest/#basics)
+--
+--       @$XDG_RUNTIME_DIR@ defines the base directory relative to which
+--       user-specific non-essential runtime files and other file objects (such
+--       as sockets, named pipes, ...) should be stored. The directory MUST be
+--       owned by the user, and they MUST be the only one having read and write
+--       access to it. Its Unix access mode MUST be 0700.
+--
+--       The lifetime of the directory MUST be bound to the user being logged
+--       in. It MUST be created when the user first logs in and if the user
+--       fully logs out the directory MUST be removed. If the user logs in more
+--       than once they should get pointed to the same directory, and it is
+--       mandatory that the directory continues to exist from their first login
+--       to their last logout on the system, and not removed in between. Files
+--       in the directory MUST not survive reboot or a full logout/login cycle.
+--
+--       The directory MUST be on a local file system and not shared with any
+--       other system. The directory MUST by fully-featured by the standards of
+--       the operating system. More specifically, on Unix-like operating systems
+--       AF_UNIX sockets, symbolic links, hard links, proper permissions, file
+--       locking, sparse files, memory mapping, file change notifications, a
+--       reliable hard link count must be supported, and no restrictions on the
+--       file name character set should be imposed. Files in this directory MAY
+--       be subjected to periodic clean-up. To ensure that your files are not
+--       removed, they should have their access time timestamp modified at least
+--       once every 6 hours of monotonic time or the 'sticky' bit should be set
+--       on the file.
+--
+--       If @$XDG_RUNTIME_DIR@ is not set applications should fall back to a
+--       replacement directory with similar capabilities and print a warning
+--       message. Applications should use this directory for communication and
+--       synchronization purposes and should not place larger files in it, since
+--       it might reside in runtime memory and cannot necessarily be swapped out
+--       to disk.
+--       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
+runtimeDir = get Var.runtimeDir
+
 dataDirs,
   configDirs ::
-    (System.Rep rep) =>
-    IO (These (NonEmpty Error) (NonEmpty (BaseDirectory rep)))
+    (Path.Rep rep, Text.Rep rep) =>
+    IO (Either VarError [Either (Error rep) (BaseDirectory rep)])
 
 -- |
 --
@@ -126,14 +165,9 @@ dataDirs = getMultiple Var.dataDirs
 --       —[§2](https://specifications.freedesktop.org/basedir-spec/latest/#basics)
 configDirs = getMultiple Var.configDirs
 
--- |
---
---        There is a single base directory relative to which user-specific
---       runtime files and other file objects should be placed. This directory
---       is defined by the environment variable @$XDG_RUNTIME_DIR@.
---       —[§2](https://specifications.freedesktop.org/basedir-spec/latest/#basics)
-runtimeDir :: (System.Rep rep) => IO (Either Error (BaseDirectory rep))
-runtimeDir = get Var.runtimeDir
+datadir,
+  sysconfdir ::
+    (Path.Rep rep, Text.Rep rep) => IO (Either (Error rep) (BaseDirectory rep))
 
 -- |
 --
@@ -145,8 +179,7 @@ runtimeDir = get Var.runtimeDir
 --       @$datadir@ defaulting to /usr/share.
 --
 --       —[§4](https://specifications.freedesktop.org/basedir-spec/latest/#referencing)
-datadir :: (System.Rep rep) => IO (Either Error (BaseDirectory rep))
-datadir = fmap parseDir . System.fromStringLiteral =<< Make.getDataDir
+datadir = fmap parseDir . Text.encodeString =<< Make.getDataDir
 
 -- |
 --
@@ -159,5 +192,4 @@ datadir = fmap parseDir . System.fromStringLiteral =<< Make.getDataDir
 --       /etc.
 --
 --       —[§4](https://specifications.freedesktop.org/basedir-spec/latest/#referencing)
-sysconfdir :: (System.Rep rep) => IO (Either Error (BaseDirectory rep))
-sysconfdir = fmap parseDir . System.fromStringLiteral =<< Make.getSysconfDir
+sysconfdir = fmap parseDir . Text.encodeString =<< Make.getSysconfDir

@@ -69,7 +69,6 @@
     ghcVersions = self.lib.nonNixTestedGhcVersions;
     cabalPackages = {
       xdg-base-directory = "core";
-      xdg-base-directory-internal = "internal";
     };
     ## The latest Stackage LTS that we also build on GitHub for.
     latestGhcVersion = "9.10.1";

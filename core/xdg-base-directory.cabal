@@ -199,10 +199,12 @@ library
     comonad,
     exceptions,
     pathway,
+    pathway-compat-base,
+    pathway-internal,
     pathway-system,
     these,
-    transformers,
-    xdg-base-directory-internal,
+    variant,
+    yaya,
   exposed-modules:
     Data.Annotated
     XDG.BaseDirectory

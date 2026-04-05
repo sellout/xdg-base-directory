@@ -1,5 +1,5 @@
 {-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE Safe #-}
+{-# LANGUAGE Trustworthy #-}
 
 -- |
 -- Copyright: 2024 Greg Pfeil
@@ -8,7 +8,8 @@
 -- The default XDG base directory values that are used for fallbacks when other
 -- values aren’t provided.
 module XDG.BaseDirectory.Default
-  ( dataHome,
+  ( BaseDirectory,
+    dataHome,
     configHome,
     stateHome,
     dataDirs,
@@ -22,37 +23,38 @@ module XDG.BaseDirectory.Default
   )
 where
 
-import "base" Control.Applicative (liftA2, pure)
-import "base" Control.Category ((.))
-import "base" Data.Bool (Bool (False))
-import "base" Data.Either (Either)
-import "base" Data.Functor (fmap)
-import "base" Data.List.NonEmpty (NonEmpty ((:|)))
-import "base" Data.String (IsString, String)
-import "base" Data.Traversable (Traversable, traverse)
-import "base" System.IO (IO)
-import "pathway" Data.Path (Filename, Path, Relativity (Abs, Rel), (</>))
-import "pathway" Data.Path.TH (posix)
-import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
-import qualified "this" XDG.BaseDirectory.Default.Relative as Relative
-import "this" XDG.BaseDirectory.Internal
-  ( BaseDirectory,
-    Error,
-    getHomeDirectory,
-  )
+import safe "base" Control.Applicative (liftA2, pure)
+import safe "base" Control.Category ((.))
+import safe "base" Data.Bool (Bool (False))
+import safe "base" Data.Either (Either)
+import safe "base" Data.Functor (fmap)
+import safe "base" Data.List.NonEmpty (NonEmpty ((:|)))
+import safe "base" Data.String (IsString, String)
+import safe "base" Data.Traversable (Traversable, traverse)
+import safe "base" System.IO (IO)
+import safe "pathway" Data.Path (Filename, Path, Relativity (Abs, Rel), (</>))
+import safe "pathway" Data.Path.TH (posix)
+import safe qualified "pathway-system" System.Path as Path
+import safe qualified "pathway-system" System.Text as Text
+import "variant" Data.Variant (V)
+import safe qualified "this" XDG.BaseDirectory.Default.Relative as Relative
+import safe "this" XDG.BaseDirectory.Internal (BaseDirectory)
 
 pinHome ::
-  (Traversable (Filename typ), System.Rep rep) =>
+  (Traversable (Filename typ), Path.Rep rep, Text.Rep rep) =>
   Path ('Rel 'False) typ String ->
-  IO (Either Error (Path 'Abs typ rep))
-pinHome = liftA2 (\h r -> fmap (</> r) h) getHomeDirectory . traverse System.fromStringLiteral
+  IO (Either (V (Path.GetUserDirectoryFailure rep)) (Path 'Abs typ rep))
+pinHome =
+  liftA2 (\h r -> fmap (</> r) h) Path.getHomeDirectory
+    . traverse Text.encodeString
 
 dataHome,
   configHome,
   stateHome,
   cacheHome,
   binHome ::
-    (System.Rep rep) => IO (Either Error (BaseDirectory rep))
+    (Path.Rep rep, Text.Rep rep) =>
+    IO (Either (V (Path.GetUserDirectoryFailure rep)) (BaseDirectory rep))
 
 -- |
 --

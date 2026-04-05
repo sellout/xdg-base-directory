@@ -1,5 +1,5 @@
 {-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE Safe #-}
+{-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE TypeApplications #-}
 
 -- |
@@ -12,15 +12,17 @@
 --       located.
 --       —[§1](https://specifications.freedesktop.org/basedir-spec/latest/#introduction)
 module XDG.BaseDirectory
-  ( dataHome,
+  ( module XDG.BaseDirectory.Internal,
+    dataHome,
     configHome,
     stateHome,
     dataDirs,
     configDirs,
     cacheHome,
-    runtimeDir,
+    -- `runtimeDir` has no default, so we just re-export the term from "Custom".
+    Custom.runtimeDir,
     -- `binHome` can’t be customized, so we just re-export the term from
-    -- `Default`.
+    -- "Default".
     Default.binHome,
 
     -- * GNU Make installation directories
@@ -29,22 +31,26 @@ module XDG.BaseDirectory
   )
 where
 
-import "base" Control.Applicative (pure, (<*>))
-import "base" Control.Category ((.))
-import "base" Control.Monad ((=<<))
-import "base" Data.Either (Either, either)
-import "base" Data.Function (($))
-import "base" Data.Functor ((<$>))
-import "base" Data.List.NonEmpty (NonEmpty ((:|)))
-import "base" Data.String (String)
-import "base" Data.Traversable (traverse)
-import "base" System.IO (IO)
-import "these" Data.These (These (These, This), these)
-import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
-import "this" Data.Annotated (Annotated (NotBut, Noted))
-import qualified "this" XDG.BaseDirectory.Custom as Custom
-import qualified "this" XDG.BaseDirectory.Default as Default
-import "this" XDG.BaseDirectory.Internal (BaseDirectory, Error)
+import safe "base" Control.Applicative (pure)
+import safe "base" Control.Category ((.))
+import safe "base" Control.Monad (Monad, (=<<))
+import safe "base" Data.Bifunctor (bimap)
+import safe "base" Data.Either (Either, either, partitionEithers)
+import safe "base" Data.Foldable (null)
+import safe "base" Data.Function (($))
+import safe "base" Data.Functor ((<$>))
+import safe "base" Data.List.NonEmpty (NonEmpty, nonEmpty)
+import safe "base" Data.Maybe (maybe)
+import safe "base" Data.String (String)
+import safe "base" Data.Traversable (traverse)
+import safe "base" System.IO (IO)
+import safe qualified "pathway-system" System.Path as Path
+import safe qualified "pathway-system" System.Text as Text
+import "variant" Data.Variant (V, toVariant)
+import safe "this" Data.Annotated (Annotated (NotBut, Noted))
+import safe qualified "this" XDG.BaseDirectory.Custom as Custom
+import safe qualified "this" XDG.BaseDirectory.Default as Default
+import safe "this" XDG.BaseDirectory.Internal (BaseDirectory, Error, VarError)
 
 -- | The spec says
 --
@@ -55,29 +61,48 @@ import "this" XDG.BaseDirectory.Internal (BaseDirectory, Error)
 --   so we don’t bother to return any error here, as we are going to discard it
 --   anyway.
 getOrDefault ::
-  Either e (BaseDirectory rep) ->
-  Either e (BaseDirectory rep) ->
-  These (NonEmpty e) (BaseDirectory rep)
+  (Monad m) =>
+  m (Either e (BaseDirectory rep)) ->
+  m (Either e' (BaseDirectory rep)) ->
+  m (Either (e', e) (Annotated e' (BaseDirectory rep)))
 getOrDefault def =
-  either (\e -> either (This . (e :|) . pure) (These $ e :| []) def) pure
+  (either (\e' -> bimap (e',) (Noted e') <$> def) (pure . pure . NotBut) =<<)
 
 -- |
 --
 --  __TODO__: If we end up ignoring all of the directories in this list, should
 --            we use the defaults?
 getMultipleOrDefault ::
-  NonEmpty (BaseDirectory rep) ->
-  These (NonEmpty e) (NonEmpty (BaseDirectory rep)) ->
-  Annotated (NonEmpty e) (NonEmpty (BaseDirectory rep))
-getMultipleOrDefault def = these (`Noted` def) pure Noted
+  (Monad m) =>
+  m (NonEmpty (BaseDirectory rep)) ->
+  m (Either VarError [Either (Error rep) (BaseDirectory rep)]) ->
+  m (Annotated (V '[VarError, [Error rep]]) (NonEmpty (BaseDirectory rep)))
+getMultipleOrDefault def =
+  ( either
+      (\e -> Noted (toVariant e) <$> def)
+      ( ( \(errs, dirs) ->
+            maybe
+              (Noted (toVariant errs) <$> def)
+              (pure . if null errs then NotBut else Noted $ toVariant errs)
+              $ nonEmpty dirs
+        )
+          . partitionEithers
+      )
+      =<<
+  )
 
 dataHome,
   configHome,
   stateHome,
   cacheHome ::
-    (System.Rep rep) => IO (These (NonEmpty Error) (BaseDirectory rep))
-dataHome = getOrDefault <$> Default.dataHome <*> Custom.dataHome
-configHome = getOrDefault <$> Default.configHome <*> Custom.configHome
+    (Path.Rep rep, Text.Rep rep) =>
+    IO
+      ( Either
+          (Error rep, V (Path.GetUserDirectoryFailure rep))
+          (Annotated (Error rep) (BaseDirectory rep))
+      )
+dataHome = getOrDefault Default.dataHome Custom.dataHome
+configHome = getOrDefault Default.configHome Custom.configHome
 
 -- |
 --
@@ -91,14 +116,14 @@ configHome = getOrDefault <$> Default.configHome <*> Custom.configHome
 --       layout, open files, undo history, …)
 --
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
-stateHome = getOrDefault <$> Default.stateHome <*> Custom.stateHome
+stateHome = getOrDefault Default.stateHome Custom.stateHome
 
-cacheHome = getOrDefault <$> Default.cacheHome <*> Custom.cacheHome
+cacheHome = getOrDefault Default.cacheHome Custom.cacheHome
 
 dataDirs,
   configDirs ::
-    (System.Rep rep) =>
-    IO (Annotated (NonEmpty Error) (NonEmpty (BaseDirectory rep)))
+    (Path.Rep rep, Text.Rep rep) =>
+    IO (Annotated (V '[VarError, [Error rep]]) (NonEmpty (BaseDirectory rep)))
 
 -- |
 --
@@ -109,8 +134,8 @@ dataDirs,
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
 dataDirs =
   getMultipleOrDefault
-    <$> traverse (traverse System.fromStringLiteral) Default.dataDirs
-    <*> Custom.dataDirs
+    (traverse (traverse Text.encodeString) Default.dataDirs)
+    Custom.dataDirs
 
 -- |
 --
@@ -121,60 +146,23 @@ dataDirs =
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
 configDirs =
   getMultipleOrDefault
-    <$> traverse (traverse System.fromStringLiteral) Default.configDirs
-    <*> Custom.configDirs
-
--- |
---
---       @$XDG_RUNTIME_DIR@ defines the base directory relative to which
---       user-specific non-essential runtime files and other file objects (such
---       as sockets, named pipes, ...) should be stored. The directory MUST be
---       owned by the user, and they MUST be the only one having read and write
---       access to it. Its Unix access mode MUST be 0700.
---
---       The lifetime of the directory MUST be bound to the user being logged
---       in. It MUST be created when the user first logs in and if the user
---       fully logs out the directory MUST be removed. If the user logs in more
---       than once they should get pointed to the same directory, and it is
---       mandatory that the directory continues to exist from their first login
---       to their last logout on the system, and not removed in between. Files
---       in the directory MUST not survive reboot or a full logout/login cycle.
---
---       The directory MUST be on a local file system and not shared with any
---       other system. The directory MUST by fully-featured by the standards of
---       the operating system. More specifically, on Unix-like operating systems
---       AF_UNIX sockets, symbolic links, hard links, proper permissions, file
---       locking, sparse files, memory mapping, file change notifications, a
---       reliable hard link count must be supported, and no restrictions on the
---       file name character set should be imposed. Files in this directory MAY
---       be subjected to periodic clean-up. To ensure that your files are not
---       removed, they should have their access time timestamp modified at least
---       once every 6 hours of monotonic time or the 'sticky' bit should be set
---       on the file.
---
---       If @$XDG_RUNTIME_DIR@ is not set applications should fall back to a
---       replacement directory with similar capabilities and print a warning
---       message. Applications should use this directory for communication and
---       synchronization purposes and should not place larger files in it, since
---       it might reside in runtime memory and cannot necessarily be swapped out
---       to disk.
---       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
-runtimeDir :: (System.Rep rep) => IO (Either Error (BaseDirectory rep))
-runtimeDir = Custom.runtimeDir
+    (traverse (traverse Text.encodeString) Default.configDirs)
+    Custom.configDirs
 
 makeDir ::
-  (System.Rep rep) =>
+  (Text.Rep rep) =>
   BaseDirectory String ->
   Either e (BaseDirectory rep) ->
   IO (Annotated e (BaseDirectory rep))
 makeDir def =
   either
-    (\e -> Noted e <$> traverse System.fromStringLiteral def)
+    (\e -> Noted e <$> traverse Text.encodeString def)
     (pure . NotBut)
 
 datadir,
   sysconfdir ::
-    (System.Rep rep) => IO (Annotated Error (BaseDirectory rep))
+    (Path.Rep rep, Text.Rep rep) =>
+    IO (Annotated (Error rep) (BaseDirectory rep))
 
 -- |
 --

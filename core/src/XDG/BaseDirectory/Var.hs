@@ -27,17 +27,18 @@ import "base" Control.Applicative (pure)
 import "base" Control.Category ((.))
 import "base" Control.Monad ((<=<), (=<<))
 import "base" Data.Either (Either (Left))
-import "base" Data.Eq (Eq)
+import "base" Data.Eq (Eq, (==))
 import "base" Data.Function (($))
 import "base" Data.Functor (fmap)
 import "base" Data.Maybe (Maybe (Nothing))
+import "base" Data.Monoid (mempty)
 import "base" Data.Ord (Ord)
 import "base" Data.String (String)
 import "base" GHC.Generics (Generic)
 import "base" System.IO (IO)
 import "base" Text.Read (Read)
 import "base" Text.Show (Show)
-import qualified "xdg-base-directory-internal" XDG.BaseDirectory.Internal.System as System
+import safe qualified "pathway-system" System.Text as Text
 import "this" XDG.BaseDirectory.Internal (VarError (EmptyVar, MissingVar), note)
 
 newtype EnvironmentVariable = EnvVar String
@@ -50,14 +51,14 @@ envVar = EnvVar
 --   should be used.” This makes sure we handle all environment variables that
 --   way.
 lookupNonEmptyEnv ::
-  (System.Rep rep) => EnvironmentVariable -> IO (Either VarError rep)
+  (Text.Rep rep) => EnvironmentVariable -> IO (Either VarError rep)
 lookupNonEmptyEnv (EnvVar varName) =
   fmap
-    ( (\val -> if System.isValid val then Left $ EmptyVar varName else pure val)
+    ( (\val -> if val == mempty then Left $ EmptyVar varName else pure val)
         <=< note (MissingVar varName Nothing)
     )
-    . System.lookupEnv
-    =<< System.fromStringLiteral varName
+    . Text.lookupEnv
+    =<< Text.encodeString varName
 
 dataHome,
   configHome,

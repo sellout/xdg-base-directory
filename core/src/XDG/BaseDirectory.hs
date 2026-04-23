@@ -62,8 +62,13 @@ import safe "this" XDG.BaseDirectory.Internal (BaseDirectory, Error, VarError)
 --   anyway.
 getOrDefault ::
   (Monad m) =>
+  -- | The default value.
   m (Either e (BaseDirectory rep)) ->
+  -- | The intended value.
   m (Either e' (BaseDirectory rep)) ->
+  -- | If the intended value failed, we annotated the successful result with the
+  --   error message. If both failed, we return both the lookup failure & the
+  --   default resolution failure.
   m (Either (e', e) (Annotated e' (BaseDirectory rep)))
 getOrDefault def =
   (either (\e' -> bimap (e',) (Noted e') <$> def) (pure . pure . NotBut) =<<)

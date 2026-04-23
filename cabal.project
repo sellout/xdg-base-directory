@@ -19,6 +19,7 @@ source-repository-package
     compat/directory
     compat/file-io
     compat/filepath
+    compat/temporary
     internal
     pathway
     system
@@ -36,3 +37,4 @@ tests: True
 
 packages:
   ./core/xdg-base-directory.cabal
+  ./user-directory/xdg-user-directory.cabal

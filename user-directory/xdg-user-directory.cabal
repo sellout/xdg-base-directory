@@ -2,15 +2,16 @@ cabal-version: 3.0
 -- ^ Cabal 3.0 is the first with the `Universal-FOSS-exception-1.0` SPDX license
 --   exception.
 
-name: xdg-base-directory
+name: xdg-user-directory
 version: 0.0.1.0
-synopsis: A faithful implementation of the XDG Base Directory spec
+synopsis: A faithful implementation of the XDG user directories spec
 description:
-  This tries to capture the spec as precisely as possible, and gives the user a
-  safe and simple API.
+  This implements the xdg-user-dirs specification, providing access to
+  well-known user directories (Desktop, Documents, Downloads, etc.) via the
+  user-dirs.dirs configuration file.
 maintainer: Greg Pfeil <greg@technomadic.org>
 author: Greg Pfeil <greg@technomadic.org>
-copyright: 2024 Greg Pfeil
+copyright: 2026 Greg Pfeil
 license: AGPL-3.0-only WITH Universal-FOSS-exception-1.0 OR LicenseRef-proprietary
 license-files:
   LICENSE
@@ -44,22 +45,22 @@ bug-reports: https://github.com/sellout/xdg-base-directory/issues
 source-repository head
   type: git
   location: https://github.com/sellout/xdg-base-directory.git
-  subdir: core
+  subdir: user-directory
 
 source-repository this
   type: git
   location: https://github.com/sellout/xdg-base-directory.git
-  subdir: core
+  subdir: user-directory
   -- NB: This is the repo version, which is distinct from the package version.
   tag: v0.1.0
 
 custom-setup
   setup-depends:
     -- TODO: Due to haskell/cabal#3751, `Cabal` has to be specified even though
-    --       there’s no direct dependency. Its lower bound needs to be at least
+    --       there's no direct dependency. Its lower bound needs to be at least
     --       as high as `cabal-version` at the top of this file, and Hackage
-    --       requires it to have _some_ upper bound. (Since there’s no direct
-    --       dependency, it doesn’t use PVP bounds.)
+    --       requires it to have _some_ upper bound. (Since there's no direct
+    --       dependency, it doesn't use PVP bounds.)
     --
     -- TODO: Due to haskell/cabal#9375, 3.10.3 is required in order to load
     --       plugins from a `ghc-options` field. Unfortunately, GHCs prior to
@@ -71,14 +72,14 @@ custom-setup
 
 flag noisy-deprecations
   description:
-    Prior to GHC 9.10, the @DEPRECATED@ pragma can’t distinguish between terms
-    and types. Consenquently, you can get spurious warnings when there’s a name
+    Prior to GHC 9.10, the @DEPRECATED@ pragma can't distinguish between terms
+    and types. Consenquently, you can get spurious warnings when there's a name
     collision and the name in the other namespace is deprecated. Or you can
     choose to not get those warnings, at the risk of not being warned when
-    there’s a name collision and the namespace you’re referencing is the one
-    that’s deprecated.
+    there's a name collision and the namespace you're referencing is the one
+    that's deprecated.
   default: True
-  -- Because disabling this flag won’t help the solver.
+  -- Because disabling this flag won't help the solver.
   manual: True
 
 flag lint
@@ -86,7 +87,7 @@ flag lint
     Compile with linting plugins enabled. This is intended for developers of
     this package.
   default: False
-  -- Because disabling this flag won’t help the solver.
+  -- Because disabling this flag won't help the solver.
   manual: True
 
 -- This mimics the GHC2024 extension
@@ -201,29 +202,38 @@ library
   hs-source-dirs:
     src
   build-depends:
-    comonad,
+    containers,
     exceptions,
+    megaparsec,
     pathway,
-    pathway-compat-base,
-    pathway-internal,
     pathway-system,
-    these,
     variant,
-    yaya,
+    xdg-base-directory,
   exposed-modules:
-    Data.Annotated
-    XDG.BaseDirectory
-    XDG.BaseDirectory.Custom
-    XDG.BaseDirectory.Default
-    XDG.BaseDirectory.Default.Relative
-    XDG.BaseDirectory.IO
-    XDG.BaseDirectory.Internal
-    XDG.BaseDirectory.Opinionated
-    XDG.BaseDirectory.Var
+    XDG.UserDirectory
+    XDG.UserDirectory.Common
+    XDG.UserDirectory.Config
+    XDG.UserDirectory.IO
+    XDG.UserDirectory.Parser
+    XDG.UserDirectory.Type
   autogen-modules:
-    Paths_xdg_base_directory
+    Paths_xdg_user_directory
   other-modules:
-    Paths_xdg_base_directory
+    Paths_xdg_user_directory
+
+executable xdg-user-dir
+  import: defaults
+  hs-source-dirs:
+    app
+  main-is: XdgUserDir.hs
+  build-depends:
+    comonad,
+    megaparsec,
+    pathway,
+    pathway-system,
+    pathway-compat-directory,
+    variant,
+    xdg-user-directory,
 
 test-suite doctests
   import: defaults
@@ -233,17 +243,14 @@ test-suite doctests
   main-is: doctests.hs
   build-depends:
     doctest ^>= {0.16.0, 0.17.0, 0.18.0, 0.19.0, 0.20.0, 0.21.0, 0.22.0, 0.24.0},
-    pathway ^>= {0.0.1},
-    pathway-compat-temporary ^>= {0.0.1},
-    pathway-system ^>= {0.0.1},
-    xdg-base-directory,
+    xdg-user-directory,
   if impl(ghc >= 8.10.1)
     ghc-options:
       -- `doctest` requires the package containing the doctests as a dependency
       -- to ensure it gets built before this test-suite, even though the package
       -- appears to be unused.
       -Wno-unused-packages
-  -- TODO: The sections below here are necessary because we don’t have control
+  -- TODO: The sections below here are necessary because we don't have control
   --       over the generated `Build_doctests.hs` file. So we have to silence
   --       all of its warnings one way or another.
   ghc-options:
@@ -254,7 +261,23 @@ test-suite doctests
     ghc-options:
       -Wno-missing-deriving-strategies
   default-extensions:
-    -- Since we can’t add `{-# LANGUAGE Safe -#}` to the generated
-    -- “Build_doctests.hs”, we set it here, and that means it has to match
+    -- Since we can't add `{-# LANGUAGE Safe -#}` to the generated
+    -- "Build_doctests.hs", we set it here, and that means it has to match
     -- doctests.hs, which is `Unsafe`.
+    Unsafe
+
+test-suite xdg-user-dir-test
+  import: defaults
+  type: exitcode-stdio-1.0
+  hs-source-dirs:
+    tests
+  main-is: XdgUserDirTest.hs
+  build-depends:
+    filepath,
+    process,
+  build-tool-depends:
+    xdg-user-directory:xdg-user-dir,
+  ghc-options:
+    -Wno-missing-import-lists
+  default-extensions:
     Unsafe

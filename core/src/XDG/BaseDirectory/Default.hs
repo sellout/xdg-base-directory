@@ -54,6 +54,8 @@ dataHome,
   cacheHome,
   binHome ::
     (Path.Rep rep, Text.Rep rep) =>
+    -- | This should only fail if there is an issue looking up the @$HOME@
+    --   directory.
     IO (Either (V (Path.GetUserDirectoryFailure rep)) (BaseDirectory rep))
 
 -- |

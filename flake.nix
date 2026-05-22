@@ -41,7 +41,10 @@
     };
 
     pathway = {
-      inputs.flaky.follows = "flaky";
+      inputs = {
+        flaky.follows = "flaky";
+        flaky-haskell.follows = "flaky-haskell";
+      };
       url = "github:sellout/pathway/more-system";
     };
   };

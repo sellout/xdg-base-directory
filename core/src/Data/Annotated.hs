@@ -13,13 +13,16 @@ module Data.Annotated
   )
 where
 
-import "base" Control.Applicative (Applicative, liftA2, pure)
+import "base" Control.Applicative (Applicative, liftA2, pure, (<*>))
 import "base" Control.Category (id, (.))
 import "base" Control.Monad (Monad, (>>=))
+import "base" Data.Bifoldable (Bifoldable, bifoldr)
+import "base" Data.Bifunctor (Bifunctor, bimap)
+import "base" Data.Bitraversable (Bitraversable, bitraverse)
 import "base" Data.Eq (Eq)
 import "base" Data.Foldable (Foldable)
 import "base" Data.Function (const, ($))
-import "base" Data.Functor (Functor)
+import "base" Data.Functor (Functor, (<$>))
 import qualified "base" Data.Kind as Kind
 import "base" Data.Monoid (Monoid, mempty)
 import "base" Data.Ord (Ord)
@@ -42,6 +45,21 @@ data Annotated (a :: Kind.Type) (b :: Kind.Type) = NotBut b | Noted a b
   deriving stock (Foldable, Functor, Generic1, Traversable)
 
 type role Annotated representational representational
+
+instance Bifoldable Annotated where
+  bifoldr s s' z = \case
+    NotBut b -> s' b z
+    Noted a b -> s a $ s' b z
+
+instance Bifunctor Annotated where
+  bimap f f' = \case
+    NotBut b -> NotBut $ f' b
+    Noted a b -> Noted (f a) $ f' b
+
+instance Bitraversable Annotated where
+  bitraverse f f' = \case
+    NotBut b -> NotBut <$> f' b
+    Noted a b -> Noted <$> f a <*> f' b
 
 -- | Case analysis for 'Annotated'. The first function handles the unannotated
 --   case ('NotBut'), the second handles the annotated case ('Noted').

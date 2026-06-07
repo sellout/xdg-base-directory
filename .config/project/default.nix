@@ -104,7 +104,7 @@
     inherit (self.lib) defaultGhcVersion;
     ghcVersions = self.lib.nonNixTestedGhcVersions;
     cabalPackages = {
-      
+
       xdg-base-directory = "core";
       xdg-user-directory = "user-directory";
     };
@@ -113,5 +113,8 @@
   };
 
   ## publishing
-  services.github.settings.repository.topics = [];
+  services.github.settings.repository = {
+    private = false;
+    topics = [];
+  };
 }

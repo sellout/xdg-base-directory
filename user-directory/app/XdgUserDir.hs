@@ -72,7 +72,8 @@ main =
           )
           pure
           -- TODO: Don’t discard the warnings. Output them if there’s a debug
-          -- flag or something.
+          --       flag or something.
+          . extract
           . extract
           <=< Config.withConfig
           $ either

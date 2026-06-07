@@ -18,6 +18,7 @@ import safe "base" Data.Bool (Bool (False))
 import safe "base" Data.Either (Either (Left), either)
 import safe "base" Data.Function (($))
 import safe "base" Data.Functor (fmap, (<$>))
+import safe "base" Data.List.NonEmpty (NonEmpty)
 import safe "base" Data.String (String)
 import safe "base" Data.Traversable (traverse)
 import safe qualified "base" System.IO as IO
@@ -61,9 +62,16 @@ withUserFile ::
   Path ('Rel 'False) 'File String ->
   IO.IOMode ->
   (IO.Handle -> m a) ->
-  m (Annotated (AggregateDirWarnings String) (Either Error a))
+  m
+    ( Annotated
+        (AggregateDirWarnings String)
+        ( Annotated
+            (NonEmpty (V SysPath.OpenFileFailure))
+            (Either Error (Either (V SysPath.OpenFileFailure) a))
+        )
+    )
 withUserFile userDir file mode action =
-  fmap (first (either UserDirConfigFailure HomeDirFailure) . assocEither <$>)
+  fmap (fmap (first (either UserDirConfigFailure HomeDirFailure) . assocEither <$>))
     . withConfig
     $ traverse (\dir -> SysPath.withFile (dir </> file) mode action)
       <=< liftIO . getUserDirectory userDir

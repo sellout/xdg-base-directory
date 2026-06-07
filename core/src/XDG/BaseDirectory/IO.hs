@@ -57,6 +57,7 @@ module XDG.BaseDirectory.IO
     IOWriteMode (..),
     InvalidRuntimeDir (..),
     SystemDirWarnings,
+    WithFileFailure,
     withUserFile,
     withUserFileRO,
     withUserTargetFile,
@@ -334,6 +335,9 @@ verifyRuntimeDir ::
 verifyRuntimeDir dir =
   bool (Left InvalidLifetime) (pure ()) <$> Path.doesExist dir
 
+type WithFileFailure =
+  Concat Path.OpenFileFailure Path.MaybeParentCreationFailure :: [Kind.Type]
+
 -- |
 --
 --       If, when attempting to write a file, the destination directory is
@@ -351,10 +355,16 @@ withFile ::
   IOWriteMode ->
   (Path 'Abs 'File rep -> Handle -> m a) ->
   BaseDirectory rep ->
-  m (Either (V Path.MaybeParentCreationFailure) a)
+  m (Either (V WithFileFailure) a)
 withFile filename mode action base =
   let filepath = base </> filename
-   in traverse (\() -> Path.withFile filepath (resolveIOWriteMode mode) $ action filepath)
+   in either
+        (pure . Left . liftVariant)
+        ( \() ->
+            fmap (first liftVariant)
+              . Path.withFile filepath (resolveIOWriteMode mode)
+              $ action filepath
+        )
         <=< liftIO . Path.createDirectoryWithParentsIfMissing
         $ File.directory filepath
 
@@ -363,7 +373,7 @@ withFileRO ::
   Path ('Rel 'False) 'File rep ->
   (Path 'Abs 'File rep -> Handle -> m a) ->
   BaseDirectory rep ->
-  m a
+  m (Either (V Path.OpenFileFailure) a)
 withFileRO filename action base =
   let filepath = base </> filename
    in Path.withFile filepath IO.ReadMode $ action filepath
@@ -384,7 +394,7 @@ withUserFile ::
   Path ('Rel 'False) 'File rep ->
   IOWriteMode ->
   (Path 'Abs 'File rep -> Handle -> m a) ->
-  m (Either (V ((Error rep, V (Path.GetUserDirectoryFailure rep)) ': Path.MaybeParentCreationFailure)) (Annotated (Error rep) a))
+  m (Either (V ((Error rep, V (Path.GetUserDirectoryFailure rep)) ': WithFileFailure)) (Annotated (Error rep) a))
 withUserFile user filename mode action =
   fmap join
     . traverse
@@ -405,12 +415,33 @@ withUserFileRO ::
   m
     ( Either
         (Error rep, V (Path.GetUserDirectoryFailure rep))
-        (Annotated (Error rep) a)
+        (Annotated (Error rep) (Either (V Path.OpenFileFailure) a))
     )
 withUserFileRO user filename action =
   traverse (traverse $ withFileRO filename action)
     <=< liftIO
     $ resolveUser user
+
+-- | Apply an action to the same file in each directory.
+foldDirs ::
+  (MonadIO m, MonadMask m, Path.Rep rep) =>
+  Path ('Rel 'False) 'File rep ->
+  ([(Path 'Abs 'File rep, Handle)] -> m a) ->
+  [BaseDirectory rep] ->
+  -- |
+  --
+  --  __FIXME__: Rewrite this so we have a @`These` (`NonEmpty` `IOError`)@ at the end.
+  m (Annotated (NonEmpty (V Path.OpenFileFailure)) a)
+foldDirs filename action dirs =
+  foldr
+    ( \dir act others ->
+        -- FIXME: Ensure this `Noted` isn’t discarding the other annotations.
+        either (\e -> (Noted (pure e) =<<) <$> act others) pure
+          =<< withFileRO filename (\p -> act . (: others) . (p,)) dir
+    )
+    (fmap pure . action)
+    dirs
+    []
 
 -- | Open all of the associated files.
 --
@@ -450,14 +481,10 @@ withAggregateFiles ::
   --   handles are in order of decreasing importance, so the ones after the
   --   first can be dropped, or otherwise have earlier ones layered on them.
   ([(Path 'Abs 'File rep, Handle)] -> m a) ->
-  m
-    ( Annotated
-        ( These
-            (Error rep `AndMaybe` V (Path.GetUserDirectoryFailure rep))
-            (V '[VarError, [Error rep]])
-        )
-        a
-    )
+  -- |
+  --
+  --  __FIXME__: Don’t nest `Aggregated`, instead combine the per-file errors in one level.
+  m (Annotated (AggregateDirWarnings rep) (Annotated (NonEmpty (V Path.OpenFileFailure)) a))
 withAggregateFiles aggregate filename action =
   traverse (foldDirs filename action . toList)
     <=< liftIO
@@ -482,7 +509,7 @@ withUserTargetFile ::
     ( Either
         ( V
             ( (Error rep, V (Path.GetUserDirectoryFailure rep))
-                ': Path.MaybeParentCreationFailure
+                ': WithFileFailure
             )
         )
         (Annotated (Error rep) a)
@@ -508,7 +535,7 @@ withSystemTargetFile ::
   Path ('Rel 'False) 'File rep ->
   Bool ->
   (Path 'Abs 'File rep -> Handle -> m a) ->
-  m (Annotated (Error rep) (Either (V Path.MaybeParentCreationFailure) a))
+  m (Annotated (Error rep) (Either (V WithFileFailure) a))
 withSystemTargetFile aggregate filename truncate action =
   traverse
     (withFile filename (if truncate then WriteMode else AppendMode) action)
@@ -618,7 +645,7 @@ withRuntimeFile ::
   Maybe Bool ->
   (Error rep -> m (BaseDirectory rep)) ->
   (Path 'Abs 'File rep -> Handle -> m a) ->
-  m (Either (V (InvalidRuntimeDir rep ': Path.MaybeParentCreationFailure)) a)
+  m (Either (V (InvalidRuntimeDir rep ': WithFileFailure)) a)
 withRuntimeFile filename mode preserve =
   withRuntimeFile'
     (\fn handle -> fmap (first liftVariant) . withFile fn mode handle)
@@ -639,26 +666,11 @@ withRuntimeFileRO ::
   Path ('Rel 'False) 'File rep ->
   (Error rep -> m (BaseDirectory rep)) ->
   (Path 'Abs 'File rep -> Handle -> m a) ->
-  m (Either (V '[InvalidRuntimeDir rep]) a)
+  m (Either (V (InvalidRuntimeDir rep ': WithFileFailure)) a)
 withRuntimeFileRO =
-  withRuntimeFile' (\fn handle -> fmap pure . withFileRO fn handle) Nothing
-
--- | Apply an action to the same file in each directory.
-foldDirs ::
-  (MonadIO m, MonadMask m, Path.Rep rep) =>
-  Path ('Rel 'False) 'File rep ->
-  ([(Path 'Abs 'File rep, Handle)] -> m a) ->
-  [BaseDirectory rep] ->
-  -- |
-  --
-  --  __FIXME__: Rewrite this so we have a @`These` (`NonEmpty` `IOError`)@ at the end.
-  m a
-foldDirs filename action dirs =
-  foldr
-    (\dir act others -> withFileRO filename (\p -> act . (: others) . (p,)) dir)
-    action
-    dirs
-    []
+  withRuntimeFile'
+    (\fn handle -> fmap (first liftVariant) . withFileRO fn handle)
+    Nothing
 
 -- | Executables can only be written, not read. To /find/ an executable, you
 --   should check the @PATH@ environment variable.
@@ -685,7 +697,7 @@ withExecutableFile ::
         ( Either
             ( V
                 ( Concat
-                    Path.MaybeParentCreationFailure
+                    WithFileFailure
                     (Path.GetUserDirectoryFailure rep)
                 )
             )

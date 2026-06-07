@@ -75,6 +75,7 @@ import safe "base" Data.Bool (Bool (False))
 import safe "base" Data.Either (Either)
 import safe "base" Data.Function (flip)
 import safe qualified "base" Data.Kind as Kind
+import safe "base" Data.List.NonEmpty (NonEmpty)
 import safe "base" Data.Maybe (Maybe)
 import safe "base" System.IO (Handle)
 import safe "exceptions" Control.Monad.Catch (MonadMask)
@@ -92,6 +93,7 @@ import safe "this" XDG.BaseDirectory.IO
     IOWriteMode (AppendMode, ReadWriteMode, WriteMode),
     InvalidRuntimeDir,
     User (Cache, State),
+    WithFileFailure,
   )
 import safe qualified "this" XDG.BaseDirectory.IO as XDG
 
@@ -179,7 +181,7 @@ data Operations (m :: Kind.Type -> Kind.Type) (rep :: Kind.Type) = Operations
         ( Either
             ( V
                 ( (Error rep, V (Path.GetUserDirectoryFailure rep))
-                    ': Path.MaybeParentCreationFailure
+                    ': WithFileFailure
                 )
             )
             (Annotated (Error rep) a)
@@ -196,7 +198,7 @@ data Operations (m :: Kind.Type -> Kind.Type) (rep :: Kind.Type) = Operations
       m
         ( Either
             (Error rep, V (Path.GetUserDirectoryFailure rep))
-            (Annotated (Error rep) a)
+            (Annotated (Error rep) (Either (V Path.OpenFileFailure) a))
         ),
     -- | Open the set of `Config` or `Data` files for reading.
     --   To write to (some of) these files, use `withTargetFile`.
@@ -219,14 +221,18 @@ data Operations (m :: Kind.Type -> Kind.Type) (rep :: Kind.Type) = Operations
       Aggregate ->
       Path ('Rel 'False) 'File rep ->
       ([(Path 'Abs 'File rep, Handle)] -> m a) ->
-      m (Annotated (AggregateDirWarnings rep) a),
+      m
+        ( Annotated
+            (AggregateDirWarnings rep)
+            (Annotated (NonEmpty (V Path.OpenFileFailure)) a)
+        ),
     withSystemTargetFile ::
       forall a.
       Aggregate ->
       Path ('Rel 'False) 'File rep ->
       Bool ->
       (Path 'Abs 'File rep -> Handle -> m a) ->
-      m (Annotated (Error rep) (Either (V Path.MaybeParentCreationFailure) a)),
+      m (Annotated (Error rep) (Either (V WithFileFailure) a)),
     -- | This can only write to the targeted file. To read, use
     --   `withAggregateFiles` to access all of the related files.
     --
@@ -253,7 +259,7 @@ data Operations (m :: Kind.Type -> Kind.Type) (rep :: Kind.Type) = Operations
         ( Either
             ( V
                 ( (Error rep, V (Path.GetUserDirectoryFailure rep))
-                    ': Path.MaybeParentCreationFailure
+                    ': WithFileFailure
                 )
             )
             (Annotated (Error rep) a)
@@ -276,13 +282,13 @@ data Operations (m :: Kind.Type -> Kind.Type) (rep :: Kind.Type) = Operations
       IOWriteMode ->
       Maybe Bool ->
       (Path 'Abs 'File rep -> Handle -> m a) ->
-      m (Either (V (InvalidRuntimeDir rep ': Path.MaybeParentCreationFailure)) a),
+      m (Either (V (InvalidRuntimeDir rep ': WithFileFailure)) a),
     -- | Open a temporary file read-only.
     withRuntimeFileRO ::
       forall a.
       Path ('Rel 'False) 'File rep ->
       (Path 'Abs 'File rep -> Handle -> m a) ->
-      m (Either (V '[InvalidRuntimeDir rep]) a),
+      m (Either (V (InvalidRuntimeDir rep ': WithFileFailure)) a),
     withExecutableFile ::
       forall a.
       rep ->
@@ -294,7 +300,7 @@ data Operations (m :: Kind.Type -> Kind.Type) (rep :: Kind.Type) = Operations
             ( Either
                 ( V
                     ( Variant.Concat
-                        Path.MaybeParentCreationFailure
+                        WithFileFailure
                         (Path.GetUserDirectoryFailure rep)
                     )
                 )

@@ -103,7 +103,7 @@
     inherit (self.lib) defaultGhcVersion;
     ghcVersions = self.lib.nonNixTestedGhcVersions;
     cabalPackages = {
-      
+
       xdg-base-directory = "core";
     };
     ## The latest Stackage LTS that we also build on GitHub for.
@@ -111,5 +111,8 @@
   };
 
   ## publishing
-  services.github.settings.repository.topics = [];
+  services.github.settings.repository = {
+    private = false;
+    topics = [];
+  };
 }

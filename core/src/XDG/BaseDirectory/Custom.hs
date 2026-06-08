@@ -25,13 +25,15 @@ module XDG.BaseDirectory.Custom
   )
 where
 
+-- WAIT: Can’t use @PackageImports@ on @mixins@, see haskell/cabal#7201. This
+--       comes from pathway-compat-base.
+import safe Common (InternalFailure (ParseFailure))
 import safe "base" Control.Category ((.))
 import safe "base" Control.Monad ((<=<), (=<<))
 import safe "base" Data.Bifunctor (first)
 import safe "base" Data.Either (Either (Left), either)
 import safe "base" Data.Functor (fmap, (<$>))
 import safe "base" System.IO (IO)
-import safe "pathway-compat-base" Common (InternalFailure (ParseFailure))
 import safe qualified "pathway-system" System.Path as Path
 import safe qualified "pathway-system" System.Text as Text
 import qualified "this" Paths_xdg_base_directory as Make

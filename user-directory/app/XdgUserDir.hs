@@ -29,8 +29,8 @@ import safe "comonad" Control.Comonad (extract)
 import safe qualified "megaparsec" Text.Megaparsec as MP
 import safe qualified "pathway" Data.Path as Path
 import safe qualified "pathway" Data.Path.Format as Format
+import safe qualified "pathway-compat-base" System.IO.Error.Pathway as Error
 import safe qualified "pathway-compat-directory" System.Directory.Error as DirError
-import safe qualified "pathway-compat-directory" System.IO.Error as Error
 import safe qualified "pathway-system" System.Path as FS
 import "variant" Data.Variant (V)
 import "variant" Data.Variant.ContFlow ((>:>))

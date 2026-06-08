@@ -69,6 +69,9 @@ module XDG.BaseDirectory.Opinionated
   )
 where
 
+-- WAIT: Can’t use @PackageImports@ on @mixins@, see haskell/cabal#7201. This
+--       comes from pathway-compat-base.
+import safe System.IO.Pathway (OpenFileFailure)
 import safe "base" Control.Category ((.))
 import safe "base" Control.Monad.IO.Class (MonadIO)
 import safe "base" Data.Bool (Bool (False))
@@ -198,7 +201,7 @@ data Operations (m :: Kind.Type -> Kind.Type) (rep :: Kind.Type) = Operations
       m
         ( Either
             (Error rep, V (Path.GetUserDirectoryFailure rep))
-            (Annotated (Error rep) (Either (V Path.OpenFileFailure) a))
+            (Annotated (Error rep) (Either (V OpenFileFailure) a))
         ),
     -- | Open the set of `Config` or `Data` files for reading.
     --   To write to (some of) these files, use `withTargetFile`.
@@ -224,7 +227,7 @@ data Operations (m :: Kind.Type -> Kind.Type) (rep :: Kind.Type) = Operations
       m
         ( Annotated
             (AggregateDirWarnings rep)
-            (Annotated (NonEmpty (V Path.OpenFileFailure)) a)
+            (Annotated (NonEmpty (V OpenFileFailure)) a)
         ),
     withSystemTargetFile ::
       forall a.

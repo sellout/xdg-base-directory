@@ -32,6 +32,7 @@ import safe "pathway" Data.Path (Path, Relativity (Rel), Type (Dir, File))
 import safe qualified "pathway" Data.Path as Path
 import safe qualified "pathway" Data.Path.Format as Format
 import safe "pathway" Data.Path.TH (posix)
+import safe "pathway-compat-base" System.IO.Pathway (OpenFileFailure)
 import safe qualified "pathway-system" System.Path as SysPath
 import safe qualified "pathway-system" System.Text as SysText
 import "variant" Data.Variant (V)
@@ -59,10 +60,7 @@ withParsedFile ::
   m
     ( Annotated
         (BaseOps.AggregateDirWarnings String)
-        ( Annotated
-            (NonEmpty (V SysPath.OpenFileFailure))
-            (Either Parser.Error b)
-        )
+        (Annotated (NonEmpty (V OpenFileFailure)) (Either Parser.Error b))
     )
 withParsedFile parser file action =
   BaseOps.withAggregateFiles xdg BaseOps.Config file $ \case
@@ -85,10 +83,7 @@ withConfigFrom ::
   m
     ( Annotated
         (BaseOps.AggregateDirWarnings String)
-        ( Annotated
-            (NonEmpty (V SysPath.OpenFileFailure))
-            (Either Parser.Error a)
-        )
+        (Annotated (NonEmpty (V OpenFileFailure)) (Either Parser.Error a))
     )
 withConfigFrom = withParsedFile Parser.userDirs
 
@@ -102,9 +97,6 @@ withConfig ::
   m
     ( Annotated
         (BaseOps.AggregateDirWarnings String)
-        ( Annotated
-            (NonEmpty (V SysPath.OpenFileFailure))
-            (Either Parser.Error a)
-        )
+        (Annotated (NonEmpty (V OpenFileFailure)) (Either Parser.Error a))
     )
 withConfig = withConfigFrom defaultFile

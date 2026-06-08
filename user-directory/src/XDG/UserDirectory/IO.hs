@@ -24,6 +24,7 @@ import safe "base" Data.Traversable (traverse)
 import safe qualified "base" System.IO as IO
 import safe "exceptions" Control.Monad.Catch (MonadMask)
 import safe "pathway" Data.Path (Path, Relativity (Rel), Type (File), (</>))
+import safe "pathway-compat-base" System.IO.Pathway (OpenFileFailure)
 import safe qualified "pathway-system" System.Path as SysPath
 import "variant" Data.Variant (V)
 import safe "xdg-base-directory" Data.Annotated (Annotated)
@@ -66,8 +67,8 @@ withUserFile ::
     ( Annotated
         (AggregateDirWarnings String)
         ( Annotated
-            (NonEmpty (V SysPath.OpenFileFailure))
-            (Either Error (Either (V SysPath.OpenFileFailure) a))
+            (NonEmpty (V OpenFileFailure))
+            (Either Error (Either (V OpenFileFailure) a))
         )
     )
 withUserFile userDir file mode action =

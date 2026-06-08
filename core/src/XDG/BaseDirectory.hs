@@ -1,6 +1,4 @@
-{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE Trustworthy #-}
-{-# LANGUAGE TypeApplications #-}
 
 -- |
 -- Copyright: 2024 Greg Pfeil

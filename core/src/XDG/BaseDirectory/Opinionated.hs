@@ -69,9 +69,6 @@ module XDG.BaseDirectory.Opinionated
   )
 where
 
--- WAIT: Can’t use @PackageImports@ on @mixins@, see haskell/cabal#7201. This
---       comes from pathway-compat-base.
-import safe System.IO.Pathway (OpenFileFailure)
 import safe "base" Control.Category ((.))
 import safe "base" Control.Monad.IO.Class (MonadIO)
 import safe "base" Data.Bool (Bool (False))
@@ -84,6 +81,7 @@ import safe "base" System.IO (Handle)
 import safe "exceptions" Control.Monad.Catch (MonadMask)
 import safe "pathway" Data.Path (Path, Relativity (Abs, Rel), Type (Dir, File), (</>))
 import safe qualified "pathway" Data.Path.Directory as Directory
+import safe "pathway-compat-base" System.IO.Pathway (OpenFileFailure)
 import safe qualified "pathway-system" System.Path as Path
 import safe qualified "pathway-system" System.Text as Text
 import "variant" Data.Variant (V)

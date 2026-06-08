@@ -210,11 +210,6 @@ library
     these,
     variant,
     yaya,
-  mixins:
-    -- NOTE: This allows `Paths_*` to find the "System.Environment" from base.
-    pathway-compat-base hiding (System.Environment)
-  ghc-options:
-    -Wno-unused-packages
   exposed-modules:
     Data.Annotated
     XDG.BaseDirectory

@@ -1,2 +1,0 @@
-### This empty TOML lets us disable Henforcer for certain targets. (Pointing to
-### /dev/null isn’t an option, because Windows.)

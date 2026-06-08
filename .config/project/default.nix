@@ -55,7 +55,6 @@
       };
     in
       perPackageFiles "core"
-      // perPackageFiles "internal"
       // perPackageFiles "user-directory";
   };
 
@@ -104,7 +103,6 @@
     inherit (self.lib) defaultGhcVersion;
     ghcVersions = self.lib.nonNixTestedGhcVersions;
     cabalPackages = {
-
       xdg-base-directory = "core";
       xdg-user-directory = "user-directory";
     };

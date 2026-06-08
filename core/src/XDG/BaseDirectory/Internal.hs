@@ -12,9 +12,6 @@ module XDG.BaseDirectory.Internal
   )
 where
 
--- WAIT: Can’t use @PackageImports@ on @mixins@, see haskell/cabal#7201. This
---       comes from pathway-compat-base.
-import Common (InternalFailure)
 import "base" Control.Applicative (pure)
 import "base" Data.Either (Either (Left))
 import "base" Data.Eq (Eq)
@@ -28,6 +25,7 @@ import "base" System.IO.Error (IOError)
 import "base" Text.Show (Show)
 import "pathway" Data.Path (Path, Type (Dir))
 import "pathway" Data.Path.Relativity (Relativity (Abs, Any))
+import "pathway-compat-base" Common (InternalFailure)
 import "pathway-internal" Data.Path.Internal (parents)
 import qualified "yaya" Yaya.Pattern as Strict
 

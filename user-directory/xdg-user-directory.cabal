@@ -264,18 +264,18 @@ test-suite doctests
     -- doctests.hs, which is `Unsafe`.
     Unsafe
 
-test-suite xdg-user-dir-test
-  import: defaults
-  type: exitcode-stdio-1.0
-  hs-source-dirs:
-    tests
-  main-is: XdgUserDirTest.hs
-  build-depends:
-    filepath,
-    process,
-  build-tool-depends:
-    xdg-user-directory:xdg-user-dir,
-  ghc-options:
-    -Wno-missing-import-lists
-  default-extensions:
-    Unsafe
+-- FIXME: This really needs to set up custom XDG_CONFIG_HOME & XDG_CONFIG_DIRS
+--        to be able to test, rather than just relying on it actually being
+--        configured by the user (which doesn’t work for testing under Nix
+--        anyway).
+-- test-suite xdg-user-dir-test
+--   import: defaults
+--   type: exitcode-stdio-1.0
+--   hs-source-dirs:
+--     tests
+--   main-is: XdgUserDirTest.hs
+--   build-depends:
+--     filepath,
+--     process,
+--   build-tool-depends:
+--     xdg-user-directory:xdg-user-dir,

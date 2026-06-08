@@ -72,6 +72,9 @@ module XDG.BaseDirectory.IO
   )
 where
 
+-- WAIT: Can’t use @PackageImports@ on @mixins@, see haskell/cabal#7201. This
+--       comes from pathway-compat-base.
+import safe System.IO.Pathway (OpenFileFailure)
 import safe "base" Control.Applicative (liftA2, pure)
 import safe "base" Control.Category ((.))
 import safe "base" Control.Monad (join, (<=<), (=<<))
@@ -336,7 +339,7 @@ verifyRuntimeDir dir =
   bool (Left InvalidLifetime) (pure ()) <$> Path.doesExist dir
 
 type WithFileFailure =
-  Concat Path.OpenFileFailure Path.MaybeParentCreationFailure :: [Kind.Type]
+  Concat OpenFileFailure Path.MaybeParentCreationFailure :: [Kind.Type]
 
 -- |
 --
@@ -373,7 +376,7 @@ withFileRO ::
   Path ('Rel 'False) 'File rep ->
   (Path 'Abs 'File rep -> Handle -> m a) ->
   BaseDirectory rep ->
-  m (Either (V Path.OpenFileFailure) a)
+  m (Either (V OpenFileFailure) a)
 withFileRO filename action base =
   let filepath = base </> filename
    in Path.withFile filepath IO.ReadMode $ action filepath
@@ -415,7 +418,7 @@ withUserFileRO ::
   m
     ( Either
         (Error rep, V (Path.GetUserDirectoryFailure rep))
-        (Annotated (Error rep) (Either (V Path.OpenFileFailure) a))
+        (Annotated (Error rep) (Either (V OpenFileFailure) a))
     )
 withUserFileRO user filename action =
   traverse (traverse $ withFileRO filename action)
@@ -431,7 +434,7 @@ foldDirs ::
   -- |
   --
   --  __FIXME__: Rewrite this so we have a @`These` (`NonEmpty` `IOError`)@ at the end.
-  m (Annotated (NonEmpty (V Path.OpenFileFailure)) a)
+  m (Annotated (NonEmpty (V OpenFileFailure)) a)
 foldDirs filename action dirs =
   foldr
     ( \dir act others ->
@@ -484,7 +487,7 @@ withAggregateFiles ::
   -- |
   --
   --  __FIXME__: Don’t nest `Aggregated`, instead combine the per-file errors in one level.
-  m (Annotated (AggregateDirWarnings rep) (Annotated (NonEmpty (V Path.OpenFileFailure)) a))
+  m (Annotated (AggregateDirWarnings rep) (Annotated (NonEmpty (V OpenFileFailure)) a))
 withAggregateFiles aggregate filename action =
   traverse (foldDirs filename action . toList)
     <=< liftIO

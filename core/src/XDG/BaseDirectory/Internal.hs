@@ -1,4 +1,5 @@
 {-# LANGUAGE Safe #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 -- |
 -- Copyright: 2024 Greg Pfeil
@@ -23,6 +24,7 @@ import "base" Data.Void (Void)
 import "base" GHC.Generics (Generic)
 import "base" System.IO.Error (IOError)
 import "base" Text.Show (Show)
+import qualified "megaparsec" Text.Megaparsec.Stream as MP
 import "pathway" Data.Path (Path, Type (Dir))
 import "pathway" Data.Path.Relativity (Relativity (Abs, Any))
 import "pathway-compat-base" Common (InternalFailure)
@@ -45,8 +47,6 @@ data VarError
 --  __NB__: This is lacking `Ord` and `Read` instances because
 --          `Dir.InternalFailure` is missing them.
 --
---  __TODO__: Add `Eq` and `Show` instances.
---
 -- @since 0.0.1.0
 data Error (rep :: Kind.Type)
   = Var VarError
@@ -56,6 +56,10 @@ data Error (rep :: Kind.Type)
   deriving stock (Generic)
 
 type role Error nominal
+
+deriving stock instance (Eq rep, Eq (MP.Token rep)) => Eq (Error rep)
+
+deriving stock instance (Show rep, Show (MP.Token rep)) => Show (Error rep)
 
 -- | An absolute directory path, as required by the XDG base directory spec.
 --

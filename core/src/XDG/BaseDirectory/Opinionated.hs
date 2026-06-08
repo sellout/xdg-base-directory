@@ -171,7 +171,7 @@ data Operations (m :: Kind.Type -> Kind.Type) (rep :: Kind.Type) = Operations
   { -- | Write (or read\/write) a file in either the `Cache` or `State` directory.
     --
     -- >>> withUserFile myprogram State [posix|archive.db|] ReadWriteMode $ const pure
-    -- Right (These (FileError (ConstructionError (Var (...Var "XDG_STATE_HOME"...)) :| []) {handle: .../home/example-user/.local/state/myprogram/archive.db})
+    -- Right (Noted (Var (...Var "XDG_STATE_HOME"...)) {handle: /.../home/example-user/.local/state/myprogram/archive.db})
     withUserFile ::
       forall a.
       User ->
@@ -190,7 +190,7 @@ data Operations (m :: Kind.Type -> Kind.Type) (rep :: Kind.Type) = Operations
     -- | Read a file in either the `Cache` or `State` directory.
     --
     -- >>> withUserFileRO myprogram State [posix|archive.db|] $ const pure
-    -- This (ConstructionError (Var (...Var "XDG_STATE_HOME"...) :| [IOError .../home/example-user/.local/state/myprogram/archive.db: openFile: does not exist (No such file or directory)])
+    -- Right (Noted (Var (...Var "XDG_STATE_HOME"...)) (Left (DoesNotExistError /.../home/example-user/.local/state/myprogram/archive.db: openFile: does not exist (No such file or directory))))
     withUserFileRO ::
       forall a.
       User ->
@@ -213,10 +213,10 @@ data Operations (m :: Kind.Type -> Kind.Type) (rep :: Kind.Type) = Operations
     --        —[§4](https://specifications.freedesktop.org/basedir-spec/0.8/#referencing)
     --
     -- >>> withAggregateFiles myprogram Config [posix|settings.dhall|] $ pure . fmap snd
-    -- This [ConstructionError (Var (...Var "XDG_CONFIG_HOME"...),ConstructionError (Var (MissingVar "XDG_CONFIG_DIRS" Nothing)),IOError .../home/example-user/.config/myprogram/settings.dhall: openFile: does not exist (No such file or directory),IOError /etc/xdg/myprogram/settings.dhall: openFile: does not exist (No such file or directory)]
+    -- Noted (These (Only (Var (...Var "XDG_CONFIG_HOME"...))) (...Var "XDG_CONFIG_DIRS"...)) (Noted (DoesNotExistError /etc/xdg/myprogram/settings.dhall: openFile: does not exist (No such file or directory) :| [DoesNotExistError /.../home/example-user/.config/myprogram/settings.dhall: openFile: does not exist (No such file or directory)]) [])
     --
     -- >>> withAggregateFiles myprogram Data [posix|resources/splash.png|] $ pure . fmap snd
-    -- This [ConstructionError (Var (...Var "XDG_DATA_HOME"...),ConstructionError (Var (...Var "XDG_DATA_DIRS"...),IOError .../home/example-user/.local/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory),IOError /usr/local/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory),IOError /usr/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory)]
+    -- Noted (This (Only (Var (...Var "XDG_DATA_HOME"...)))) (Noted (DoesNotExistError /.../share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory) :| [DoesNotExistError /.../share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory),DoesNotExistError /.../share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory),DoesNotExistError /.../home/example-user/.local/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory)]) [])
     withAggregateFiles ::
       forall a.
       Aggregate ->
@@ -249,7 +249,7 @@ data Operations (m :: Kind.Type -> Kind.Type) (rep :: Kind.Type) = Operations
     --             up with the corresponding file.
     --
     -- >>> withUserTargetFile myprogram Config [posix|settings.dhall|] False $ const pure
-    -- Right (These (FileError (ConstructionError (Var (...Var "XDG_CONFIG_HOME"...)) :| []) {handle: .../home/example-user/.config/myprogram/settings.dhall})
+    -- Right (Noted (Var (...Var "XDG_CONFIG_HOME"...)) {handle: /.../home/example-user/.config/myprogram/settings.dhall})
     withUserTargetFile ::
       forall a.
       Aggregate ->
@@ -276,7 +276,7 @@ data Operations (m :: Kind.Type -> Kind.Type) (rep :: Kind.Type) = Operations
     --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
     --
     -- >>> withRuntimeFile myprogram [posix|super-secret.age|] ReadWriteMode Nothing $ const pure
-    -- Right {handle: /.../myprogram/super-secret.age}
+    -- Left InvalidLifetime
     withRuntimeFile ::
       forall a.
       Path ('Rel 'False) 'File rep ->

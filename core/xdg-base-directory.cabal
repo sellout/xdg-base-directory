@@ -203,6 +203,7 @@ library
   build-depends:
     comonad,
     exceptions,
+    megaparsec,
     pathway,
     pathway-compat-base,
     pathway-internal,

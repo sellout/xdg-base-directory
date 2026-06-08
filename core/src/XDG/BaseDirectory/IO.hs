@@ -388,7 +388,7 @@ withFileRO filename action base =
 --     ReadWriteMode
 --     $ const pure
 -- :}
--- Right (These (FileError (ConstructionError (Var (...Var "XDG_STATE_HOME"...)) :| []) {handle: /.../home/example-user/.local/state/myprogram/archive.db})
+-- Right (Noted (Var (...Var "XDG_STATE_HOME"...)) {handle: /.../home/example-user/.local/state/myprogram/archive.db})
 withUserFile ::
   (MonadIO m, MonadMask m, Path.Rep rep, Text.Rep rep) =>
   User ->
@@ -407,7 +407,7 @@ withUserFile user filename mode action =
 -- |
 --
 -- >>> withUserFileRO @IO @String State [posix|myprogram/archive.db|] $ const pure
--- This (ConstructionError (Var (...Var "XDG_STATE_HOME"...) :| [IOError .../home/example-user/.local/state/myprogram/archive.db: openFile: does not exist (No such file or directory)])
+-- Right (Noted (Var (...Var "XDG_STATE_HOME"...)) (Left (DoesNotExistError /.../home/example-user/.local/state/myprogram/archive.db: openFile: does not exist (No such file or directory))))
 withUserFileRO ::
   (MonadIO m, MonadMask m, Path.Rep rep, Text.Rep rep) =>
   User ->
@@ -463,7 +463,7 @@ foldDirs filename action dirs =
 --     [posix|myprogram/settings.dhall|]
 --     $ pure . fmap snd
 -- :}
--- This [ConstructionError (Var (...Var "XDG_CONFIG_HOME"...),ConstructionError (Var (MissingVar "XDG_CONFIG_DIRS" Nothing)),IOError .../home/example-user/.config/myprogram/settings.dhall: openFile: does not exist (No such file or directory),IOError /etc/xdg/myprogram/settings.dhall: openFile: does not exist (No such file or directory)]
+-- Noted (These (Only (Var (...Var "XDG_CONFIG_HOME"...))) (...Var "XDG_CONFIG_DIRS"...)) (Noted (DoesNotExistError /etc/xdg/myprogram/settings.dhall: openFile: does not exist (No such file or directory) :| [DoesNotExistError /.../home/example-user/.config/myprogram/settings.dhall: openFile: does not exist (No such file or directory)]) [])
 --
 -- >>> :{
 --   withAggregateFiles @IO @String
@@ -471,7 +471,7 @@ foldDirs filename action dirs =
 --     [posix|myprogram/resources/splash.png|]
 --     $ pure . fmap snd
 -- :}
--- This [ConstructionError (Var (...Var "XDG_DATA_HOME"...),ConstructionError (Var (...Var "XDG_DATA_DIRS"...),IOError .../home/example-user/.local/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory),IOError /usr/local/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory),IOError /usr/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory)]
+-- Noted (This (Only (Var (...Var "XDG_DATA_HOME"...)))) (Noted (DoesNotExistError /.../share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory) :| [DoesNotExistError /.../share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory),DoesNotExistError /.../share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory),DoesNotExistError /.../home/example-user/.local/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory)]) [])
 withAggregateFiles ::
   (MonadIO m, MonadMask m, Path.Rep rep, Text.Rep rep) =>
   -- | What kinds of files we are reading.
@@ -499,7 +499,7 @@ withAggregateFiles aggregate filename action =
 --            @XDG_CONFIG_DIRS@, respectively).
 --
 -- >>> withUserTargetFile @IO @String Config [posix|myprogram/settings.dhall|] False $ const pure
--- Right (These (FileError (ConstructionError (Var (...Var "XDG_CONFIG_HOME"...)) :| []) {handle: /.../home/example-user/.config/myprogram/settings.dhall})
+-- Right (Noted (Var (...Var "XDG_CONFIG_HOME"...)) {handle: /.../home/example-user/.config/myprogram/settings.dhall})
 withUserTargetFile ::
   (MonadIO m, MonadMask m, Path.Rep rep, Text.Rep rep) =>
   Aggregate ->
@@ -638,7 +638,7 @@ withRuntimeFile' withFile' _preserve filename fallback action =
 --     (const $ pure [posix|/run/whatever/|])
 --     $ const pure
 -- :}
--- Right {handle: /.../myprogram/super-secret.age}
+-- Left InvalidLifetime
 withRuntimeFile ::
   (MonadIO m, MonadMask m, Path.Rep rep, Path.Operations rep 'Dir, Text.Rep rep) =>
   Path ('Rel 'False) 'File rep ->
@@ -661,7 +661,7 @@ withRuntimeFile filename mode preserve =
 --     (const $ pure [posix|/run/whatever/|])
 --     $ const pure
 -- :}
--- Right {handle: /.../myprogram/super-secret.age}
+-- Left InvalidLifetime
 withRuntimeFileRO ::
   (MonadIO m, MonadMask m, Path.Rep rep, Path.Operations rep 'Dir, Text.Rep rep) =>
   Path ('Rel 'False) 'File rep ->

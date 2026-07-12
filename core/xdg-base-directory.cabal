@@ -235,6 +235,7 @@ test-suite doctests
   build-depends:
     doctest ^>= {0.16.0, 0.17.0, 0.18.0, 0.19.0, 0.20.0, 0.21.0, 0.22.0, 0.24.0},
     pathway ^>= {0.0.1},
+    pathway-compat-directory,
     pathway-compat-temporary ^>= {0.0.1},
     pathway-system ^>= {0.0.1},
     xdg-base-directory,

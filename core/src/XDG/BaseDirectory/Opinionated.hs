@@ -106,8 +106,10 @@ import safe qualified "this" XDG.BaseDirectory.IO as XDG
 -- >>> import "base" Data.Function (const, ($))
 -- >>> import "base" Data.Functor (fmap, (<$>))
 -- >>> import "base" Data.Maybe (Maybe (Nothing))
+-- >>> import "base" Data.String (String)
 -- >>> import "base" Data.Tuple (snd)
 -- >>> import "base" System.Environment (setEnv)
+-- >>> import "base" System.IO (IO)
 -- >>> import "pathway" Data.Path (toText)
 -- >>> import "pathway" Data.Path.TH (posix)
 -- >>> import qualified "pathway" Data.Path.Format as Format
@@ -117,14 +119,20 @@ import safe qualified "this" XDG.BaseDirectory.IO as XDG
 -- __TODO__: Extract this to a testing package.
 -- >>> tempBase <- getCanonicalTemporaryDirectory
 -- >>> tempRoot <- createTempDirectory tempBase "xdg-base-directory-haskell-doctest"
--- >>> tempHome = tempRoot </> [posix|home/example-user/|]
+-- >>> tempHome = (tempRoot `Directory.descendTo`) "home" `Directory.descendTo` "test-user"
 -- >>> createDirectoryWithParentsIfMissing tempHome
 -- Right ()
 -- >>> setEnv "HOME" $ toText Format.local tempHome
---
--- This duplicates the doctest for `Operations`, because that doesn’t maintain
--- the scope for its fields.
--- >>> let myprogram = subdirOperations "myprogram" . const $ pure [posix|/run/whatever/|]
+-- >>> setEnv "XDG_CACHE_HOME" . toText Format.local $ tempHome `Directory.descendTo` ".cache"
+-- >>> setEnv "XDG_CONFIG_DIRS" . toText Format.local $ (tempRoot `Directory.descendTo` "etc") `Directory.descendTo` "xdg"
+-- >>> setEnv "XDG_CONFIG_HOME" . toText Format.local $ tempHome `Directory.descendTo` ".config"
+-- >>> setEnv "XDG_DATA_DIRS" . toText Format.local $ (tempRoot `Directory.descendTo` "usr") `Directory.descendTo` "share"
+-- >>> setEnv "XDG_DATA_HOME" . toText Format.local $ (tempHome `Directory.descendTo` ".local") `Directory.descendTo` "share"
+-- >>> setEnv "XDG_STATE_HOME" . toText Format.local $ (tempHome `Directory.descendTo` ".local") `Directory.descendTo` "state"
+-- >>> let runtimeDir = (((tempRoot `Directory.descendTo` "var") `Directory.descendTo` "run")  `Directory.descendTo` "user") `Directory.descendTo` "0"
+-- >>> createDirectoryWithParentsIfMissing runtimeDir
+-- Right ()
+-- >>> setEnv "XDG_RUNTIME_DIR" $ toText Format.local runtimeDir
 
 -- |
 --
@@ -165,13 +173,8 @@ import safe qualified "this" XDG.BaseDirectory.IO as XDG
 --
 --   Finally, the __Action__ is a function for manipulating the file handle(s)
 --   while they’re open.
---
--- >>> let myprogram = subdirOperations "myprogram" . const $ pure [posix|/run/whatever/|]
 data Operations (m :: Kind.Type -> Kind.Type) (rep :: Kind.Type) = Operations
   { -- | Write (or read\/write) a file in either the `Cache` or `State` directory.
-    --
-    -- >>> withUserFile myprogram State [posix|archive.db|] ReadWriteMode $ const pure
-    -- Right (Noted (Var (...Var "XDG_STATE_HOME"...)) {handle: /.../home/example-user/.local/state/myprogram/archive.db})
     withUserFile ::
       forall a.
       User ->
@@ -188,9 +191,6 @@ data Operations (m :: Kind.Type -> Kind.Type) (rep :: Kind.Type) = Operations
             (Annotated (Error rep) a)
         ),
     -- | Read a file in either the `Cache` or `State` directory.
-    --
-    -- >>> withUserFileRO myprogram State [posix|archive.db|] $ const pure
-    -- Right (Noted (Var (...Var "XDG_STATE_HOME"...)) (Left (DoesNotExistError /.../home/example-user/.local/state/myprogram/archive.db: openFile: does not exist (No such file or directory))))
     withUserFileRO ::
       forall a.
       User ->
@@ -211,12 +211,6 @@ data Operations (m :: Kind.Type -> Kind.Type) (rep :: Kind.Type) = Operations
     --        directory should be used or, as another example, it could define
     --        rules for merging the information from the different files.
     --        —[§4](https://specifications.freedesktop.org/basedir-spec/0.8/#referencing)
-    --
-    -- >>> withAggregateFiles myprogram Config [posix|settings.dhall|] $ pure . fmap snd
-    -- Noted (These (Only (Var (...Var "XDG_CONFIG_HOME"...))) (...Var "XDG_CONFIG_DIRS"...)) (Noted (DoesNotExistError /etc/xdg/myprogram/settings.dhall: openFile: does not exist (No such file or directory) :| [DoesNotExistError /.../home/example-user/.config/myprogram/settings.dhall: openFile: does not exist (No such file or directory)]) [])
-    --
-    -- >>> withAggregateFiles myprogram Data [posix|resources/splash.png|] $ pure . fmap snd
-    -- Noted (This (Only (Var (...Var "XDG_DATA_HOME"...)))) (Noted (DoesNotExistError /.../share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory) :| [DoesNotExistError /.../share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory),DoesNotExistError /.../share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory),DoesNotExistError /.../home/example-user/.local/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory)]) [])
     withAggregateFiles ::
       forall a.
       Aggregate ->
@@ -247,9 +241,6 @@ data Operations (m :: Kind.Type -> Kind.Type) (rep :: Kind.Type) = Operations
     --             to _modify_ existing files in these places, and there’s no
     --             guarantee if we use `withAggregateFiles` that we will match
     --             up with the corresponding file.
-    --
-    -- >>> withUserTargetFile myprogram Config [posix|settings.dhall|] False $ const pure
-    -- Right (Noted (Var (...Var "XDG_CONFIG_HOME"...)) {handle: /.../home/example-user/.config/myprogram/settings.dhall})
     withUserTargetFile ::
       forall a.
       Aggregate ->
@@ -274,9 +265,6 @@ data Operations (m :: Kind.Type -> Kind.Type) (rep :: Kind.Type) = Operations
     --       it, since it might reside in runtime memory and cannot necessarily
     --       be swapped out to disk.
     --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
-    --
-    -- >>> withRuntimeFile myprogram [posix|super-secret.age|] ReadWriteMode Nothing $ const pure
-    -- Left InvalidLifetime
     withRuntimeFile ::
       forall a.
       Path ('Rel 'False) 'File rep ->
@@ -312,6 +300,29 @@ data Operations (m :: Kind.Type -> Kind.Type) (rep :: Kind.Type) = Operations
 
 type role Operations representational nominal
 
+-- | This allows writing files directly to the XDG base directories, with no
+--   program-specific subdir intervening. It’s not recommended, but may be
+--   necessary for accessing existing standardized paths (like XDG User Dirs).
+--
+-- >>> let xdgOps = bleedingOperations @IO @String . const $ pure [posix|/run/whatever/|]
+--
+-- >>> withUserFile xdgOps State [posix|myprogram-archive.db|] ReadWriteMode $ const pure
+-- Right (NotBut {handle: .../home/test-user/.local/state/myprogram-archive.db})
+--
+-- >>> withUserFileRO xdgOps State [posix|myprogram-archive.db|] $ const pure
+-- Right (NotBut (Right {handle: .../home/test-user/.local/state/myprogram-archive.db}))
+--
+-- >>> withAggregateFiles xdgOps Config [posix|myprogram-settings.dhall|] $ pure . fmap snd
+-- NotBut (Noted (DoesNotExistError .../etc/xdg/myprogram-settings.dhall: openFile: does not exist (No such file or directory) :| [DoesNotExistError .../home/test-user/.config/myprogram-settings.dhall: openFile: does not exist (No such file or directory)]) [])
+--
+-- >>> withAggregateFiles xdgOps Data [posix|resources/splash.png|] $ pure . fmap snd
+-- NotBut (Noted (DoesNotExistError .../usr/share/resources/splash.png: openFile: does not exist (No such file or directory) :| [DoesNotExistError .../home/test-user/.local/share/resources/splash.png: openFile: does not exist (No such file or directory)]) [])
+--
+-- >>> withUserTargetFile xdgOps Config [posix|settings.dhall|] False $ const pure
+-- Right (NotBut {handle: .../home/test-user/.config/settings.dhall})
+--
+-- >>> withRuntimeFile xdgOps [posix|super-secret.age|] ReadWriteMode Nothing $ const pure
+-- Right {handle: .../var/run/user/0/super-secret.age}
 bleedingOperations ::
   (MonadIO m, MonadMask m, Path.Operations rep 'Dir, Path.Rep rep, Text.Rep rep) =>
   -- | A fallback directory to use for `withRuntimeFile` and `withRuntimeFileRO`
@@ -346,6 +357,33 @@ bleedingOperations runtimeFallback =
 --  __NB__: `withExecutableFile` doesn’t use the program subdirectory.
 --
 -- >>> myprogram = subdirOperations "myprogram" . const $ pure [posix|/run/whatever/|]
+--
+-- >>> withUserFile myprogram State [posix|archive.db|] ReadWriteMode $ const pure
+-- Right (NotBut {handle: .../home/test-user/.local/state/myprogram/archive.db})
+--
+-- >>> withUserFileRO myprogram State [posix|archive.db|] $ const pure
+-- Right (NotBut (Right {handle: .../home/test-user/.local/state/myprogram/archive.db}))
+--
+--  __NOTE__: Most operations should create any missing directories, but
+--            `withRuntimeFile must /not/ create the runtime dir. However, if
+--            the runtime dir exists, it /should/ attempt to create the
+--            program-specific subdirectory (and any directories in the relative
+--            path to the file).
+--
+-- >>> withRuntimeFile myprogram [posix|some-temp-file.txt|] WriteMode Nothing $ const pure
+-- Right {handle: .../var/run/user/0/myprogram/some-temp-file.txt}
+--
+-- >>> withAggregateFiles myprogram Config [posix|settings.dhall|] $ pure . fmap snd
+-- NotBut (Noted (DoesNotExistError .../etc/xdg/myprogram/settings.dhall: openFile: does not exist (No such file or directory) :| [DoesNotExistError .../home/test-user/.config/myprogram/settings.dhall: openFile: does not exist (No such file or directory)]) [])
+--
+-- >>> withAggregateFiles myprogram Data [posix|resources/splash.png|] $ pure . fmap snd
+-- NotBut (Noted (DoesNotExistError .../usr/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory) :| [DoesNotExistError .../home/test-user/.local/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory)]) [])
+--
+-- >>> withUserTargetFile myprogram Config [posix|settings.dhall|] False $ const pure
+-- Right (NotBut {handle: .../home/test-user/.config/myprogram/settings.dhall})
+--
+-- >>> withRuntimeFile myprogram [posix|super-secret.age|] ReadWriteMode Nothing $ const pure
+-- Right {handle: .../var/run/user/0/myprogram/super-secret.age}
 subdirOperations ::
   forall m rep.
   (MonadIO m, MonadMask m, Path.Operations rep 'Dir, Path.Rep rep, Text.Rep rep) =>

@@ -132,20 +132,31 @@ import safe "this" XDG.BaseDirectory.Internal (BaseDirectory, Error, VarError)
 -- >>> import "base" Data.Function (const)
 -- >>> import "base" Data.String (String)
 -- >>> import "base" Data.Tuple (snd)
--- >>> import "base" System.Environment (setEnv)
+-- >>> import "base" System.Environment (getEnv, setEnv)
 -- >>> import "pathway" Data.Path (toText)
 -- >>> import "pathway" Data.Path.TH (posix)
 -- >>> import qualified "pathway" Data.Path.Format as Format
+-- >>> import "pathway-compat-directory" System.Directory.Overlay (getHomeDirectory)
 -- >>> import "pathway-compat-temporary" System.IO.Temp.Overlay (createTempDirectory, getCanonicalTemporaryDirectory)
 -- >>> import "pathway-system" System.Path (createDirectoryWithParentsIfMissing)
 --
 -- __TODO__: Extract this to a testing package.
 -- >>> tempBase <- getCanonicalTemporaryDirectory
 -- >>> tempRoot <- createTempDirectory tempBase "xdg-base-directory-haskell-doctest"
--- >>> tempHome = tempRoot </> [posix|home/example-user/|]
+-- >>> tempHome = (tempRoot `Directory.descendTo`) "home" `Directory.descendTo` "test-user"
 -- >>> createDirectoryWithParentsIfMissing tempHome
 -- Right ()
 -- >>> setEnv "HOME" $ toText Format.local tempHome
+-- >>> setEnv "XDG_CACHE_HOME" . toText Format.local $ tempHome `Directory.descendTo` ".cache"
+-- >>> setEnv "XDG_CONFIG_DIRS" . toText Format.local $ (tempRoot `Directory.descendTo` "etc") `Directory.descendTo` "xdg"
+-- >>> setEnv "XDG_CONFIG_HOME" . toText Format.local $ tempHome `Directory.descendTo` ".config"
+-- >>> setEnv "XDG_DATA_DIRS" . toText Format.local $ (tempRoot `Directory.descendTo` "usr") `Directory.descendTo` "share"
+-- >>> setEnv "XDG_DATA_HOME" . toText Format.local $ (tempHome `Directory.descendTo` ".local") `Directory.descendTo` "share"
+-- >>> setEnv "XDG_STATE_HOME" . toText Format.local $ (tempHome `Directory.descendTo` ".local") `Directory.descendTo` "state"
+-- >>> let runtimeDir = (((tempRoot `Directory.descendTo` "var") `Directory.descendTo` "run")  `Directory.descendTo` "user") `Directory.descendTo` "0"
+-- >>> createDirectoryWithParentsIfMissing runtimeDir
+-- Right ()
+-- >>> setEnv "XDG_RUNTIME_DIR" $ toText Format.local runtimeDir
 
 -- | The types of file that live /only/ in the user’s home directory and can be
 --   read & written arbitrarily.
@@ -388,7 +399,7 @@ withFileRO filename action base =
 --     ReadWriteMode
 --     $ const pure
 -- :}
--- Right (Noted (Var (...Var "XDG_STATE_HOME"...)) {handle: /.../home/example-user/.local/state/myprogram/archive.db})
+-- Right (NotBut {handle: .../home/test-user/.local/state/myprogram/archive.db})
 withUserFile ::
   (MonadIO m, MonadMask m, Path.Rep rep, Text.Rep rep) =>
   User ->
@@ -407,7 +418,7 @@ withUserFile user filename mode action =
 -- |
 --
 -- >>> withUserFileRO @IO @String State [posix|myprogram/archive.db|] $ const pure
--- Right (Noted (Var (...Var "XDG_STATE_HOME"...)) (Left (DoesNotExistError /.../home/example-user/.local/state/myprogram/archive.db: openFile: does not exist (No such file or directory))))
+-- Right (NotBut (Left (DoesNotExistError .../home/test-user/.local/state/myprogram/archive.db: openFile: does not exist (No such file or directory))))
 withUserFileRO ::
   (MonadIO m, MonadMask m, Path.Rep rep, Text.Rep rep) =>
   User ->
@@ -463,7 +474,7 @@ foldDirs filename action dirs =
 --     [posix|myprogram/settings.dhall|]
 --     $ pure . fmap snd
 -- :}
--- Noted (These (Only (Var (...Var "XDG_CONFIG_HOME"...))) (...Var "XDG_CONFIG_DIRS"...)) (Noted (DoesNotExistError /etc/xdg/myprogram/settings.dhall: openFile: does not exist (No such file or directory) :| [DoesNotExistError /.../home/example-user/.config/myprogram/settings.dhall: openFile: does not exist (No such file or directory)]) [])
+-- NotBut (Noted (DoesNotExistError .../etc/xdg/myprogram/settings.dhall: openFile: does not exist (No such file or directory) :| [DoesNotExistError .../home/test-user/.config/myprogram/settings.dhall: openFile: does not exist (No such file or directory)]) [])
 --
 -- >>> :{
 --   withAggregateFiles @IO @String
@@ -471,7 +482,7 @@ foldDirs filename action dirs =
 --     [posix|myprogram/resources/splash.png|]
 --     $ pure . fmap snd
 -- :}
--- Noted (This (Only (Var (...Var "XDG_DATA_HOME"...)))) (Noted (DoesNotExistError /.../share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory) :| [DoesNotExistError /.../share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory),DoesNotExistError /.../share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory),DoesNotExistError /.../home/example-user/.local/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory)]) [])
+-- NotBut (Noted (DoesNotExistError .../usr/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory) :| [DoesNotExistError .../home/test-user/.local/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory)]) [])
 withAggregateFiles ::
   (MonadIO m, MonadMask m, Path.Rep rep, Text.Rep rep) =>
   -- | What kinds of files we are reading.
@@ -499,7 +510,7 @@ withAggregateFiles aggregate filename action =
 --            @XDG_CONFIG_DIRS@, respectively).
 --
 -- >>> withUserTargetFile @IO @String Config [posix|myprogram/settings.dhall|] False $ const pure
--- Right (Noted (Var (...Var "XDG_CONFIG_HOME"...)) {handle: /.../home/example-user/.config/myprogram/settings.dhall})
+-- Right (NotBut {handle: .../home/test-user/.config/myprogram/settings.dhall})
 withUserTargetFile ::
   (MonadIO m, MonadMask m, Path.Rep rep, Text.Rep rep) =>
   Aggregate ->
@@ -638,7 +649,7 @@ withRuntimeFile' withFile' _preserve filename fallback action =
 --     (const $ pure [posix|/run/whatever/|])
 --     $ const pure
 -- :}
--- Left InvalidLifetime
+-- Right {handle: .../var/run/user/0/myprogram/super-secret.age}
 withRuntimeFile ::
   (MonadIO m, MonadMask m, Path.Rep rep, Path.Operations rep 'Dir, Text.Rep rep) =>
   Path ('Rel 'False) 'File rep ->
@@ -661,7 +672,7 @@ withRuntimeFile filename mode preserve =
 --     (const $ pure [posix|/run/whatever/|])
 --     $ const pure
 -- :}
--- Left InvalidLifetime
+-- Left (DoesNotExistError .../var/run/user/0/myprogram/super-secret.age: openFile: does not exist (No such file or directory))
 withRuntimeFileRO ::
   (MonadIO m, MonadMask m, Path.Rep rep, Path.Operations rep 'Dir, Text.Rep rep) =>
   Path ('Rel 'False) 'File rep ->
@@ -682,7 +693,7 @@ withRuntimeFileRO =
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
 --
 -- >>> withExecutableFile "some-script.sh" True $ const pure
--- NotBut (Right {handle: /.../home/example-user/.local/bin/some-script.sh})
+-- NotBut (Right {handle: .../home/test-user/.local/bin/some-script.sh})
 withExecutableFile ::
   (MonadIO m, MonadMask m, Path.Rep rep, Text.Rep rep) =>
   -- | The name of the executable to write.

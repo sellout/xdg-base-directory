@@ -236,7 +236,7 @@
       inputs.flaky.follows = "flaky";
       url =
         ## NB: The revision here needs to match the one in ./cabal.project
-        "github:sellout/pathway/344f089b2b6fa8d4f06c1a8b3f37664ef69af089";
+        "github:sellout/pathway/d918a933160e01894d5bdfebf7925466817e81a1";
     };
   };
 }

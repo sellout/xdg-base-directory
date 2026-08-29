@@ -161,11 +161,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1751865916,
-        "narHash": "sha256-8KeAkfkwYv7jECaddBLtjtjicmkhG2RISrmv4OgEZrg=",
+        "lastModified": 1781820333,
+        "narHash": "sha256-84713G332k4Omje0aZrlcLQ5MrDVUK0f5y+hMFcTsa0=",
         "owner": "sellout",
         "repo": "flaky-haskell",
-        "rev": "e3627cddd71c1e3bf3e7e690f5fca6fab057a64f",
+        "rev": "235a1a0d2f61427ea5e64d48bc4ca5a48397863f",
         "type": "github"
       },
       "original": {
@@ -325,11 +325,6 @@
     },
     "pathway": {
       "inputs": {
-        "bash-strict-mode": [
-          "pathway",
-          "flaky",
-          "bash-strict-mode"
-        ],
         "flake-utils": [
           "pathway",
           "flaky",
@@ -351,17 +346,17 @@
         ]
       },
       "locked": {
-        "lastModified": 1753371569,
-        "narHash": "sha256-UD/gd32edeqLrY11Hawm1zCC/AcW71T8B9ut+dcJdNM=",
+        "lastModified": 1787771272,
+        "narHash": "sha256-DrdGzP1il64rG7Qm1WFdzVW78agnmqCdQtvQ2bIR7TY=",
         "owner": "sellout",
         "repo": "pathway",
-        "rev": "344f089b2b6fa8d4f06c1a8b3f37664ef69af089",
+        "rev": "d918a933160e01894d5bdfebf7925466817e81a1",
         "type": "github"
       },
       "original": {
         "owner": "sellout",
         "repo": "pathway",
-        "rev": "344f089b2b6fa8d4f06c1a8b3f37664ef69af089",
+        "rev": "d918a933160e01894d5bdfebf7925466817e81a1",
         "type": "github"
       }
     },

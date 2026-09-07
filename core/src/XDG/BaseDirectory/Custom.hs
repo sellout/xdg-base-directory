@@ -104,7 +104,7 @@ cacheHome = get Var.cacheHome
 
 -- |
 --
---        There is a single base directory relative to which user-specific
+--       There is a single base directory relative to which user-specific
 --       runtime files and other file objects should be placed. This directory
 --       is defined by the environment variable @$XDG_RUNTIME_DIR@.
 --       —[§2](https://specifications.freedesktop.org/basedir-spec/latest/#basics)
@@ -142,6 +142,13 @@ cacheHome = get Var.cacheHome
 --       it might reside in runtime memory and cannot necessarily be swapped out
 --       to disk.
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
+--
+--  __NOTE__: While most temporary files should be placed in `runtimeDir`, it
+--            shouldn’t be used for staging an atomic write (that is, where you
+--            create a temporary file or directory, write to it, then rename it
+--            into place). This is because to truly be atomic, the source and
+--            destination must be on the same file system (or at least the same
+--            device). "System.Path" provides operations for this use case.
 runtimeDir = get Var.runtimeDir
 
 dataDirs,
@@ -151,17 +158,17 @@ dataDirs,
 
 -- |
 --
---        There is a set of preference ordered base directories relative to
---       which data files should be searched. This set of directories is defined
---       by the environment variable @$XDG_DATA_DIRS@.
+--       There is a set of preference ordered base directories relative to which
+--       data files should be searched. This set of directories is defined by
+--       the environment variable @$XDG_DATA_DIRS@.
 --       —[§2](https://specifications.freedesktop.org/basedir-spec/latest/#basics)
 dataDirs = getMultiple Var.dataDirs
 
 -- |
 --
---        There is a set of preference ordered base directories relative to
---       which configuration files should be searched. This set of directories
---       is defined by the environment variable @$XDG_CONFIG_DIRS@.
+--       There is a set of preference ordered base directories relative to which
+--       configuration files should be searched. This set of directories is
+--       defined by the environment variable @$XDG_CONFIG_DIRS@.
 --       —[§2](https://specifications.freedesktop.org/basedir-spec/latest/#basics)
 configDirs = getMultiple Var.configDirs
 

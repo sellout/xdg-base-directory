@@ -13,7 +13,7 @@ if impl(ghc >= 9.8)
 source-repository-package
   type: git
   location: https://github.com/sellout/pathway.git
-  branch: more-system
+  branch: main
   subdir:
     compat/base
     compat/directory

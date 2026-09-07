@@ -45,7 +45,7 @@
         flaky.follows = "flaky";
         flaky-haskell.follows = "flaky-haskell";
       };
-      url = "github:sellout/pathway/more-system";
+      url = "github:sellout/pathway";
     };
   };
 }

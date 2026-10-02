@@ -1,6 +1,5 @@
 # xdg-base-directory
 
-[![built with garnix](https://img.shields.io/endpoint?url=https%3A%2F%2Fgarnix.io%2Fapi%2Fbadges%2Fsellout%2Fxdg-base-directory)](https://garnix.io/repo/sellout/xdg-base-directory)
 [![GitHub CI](https://github.com/sellout/xdg-base-directory/actions/workflows/build.yml/badge.svg)](https://github.com/sellout/xdg-base-directory/actions/workflows/build.yml)
 [![Nix CI](https://nix-ci.com/badge/gh:sellout:xdg-base-directory)](https://nix-ci.com/gh:sellout:xdg-base-directory)
 [![Project Manager](https://img.shields.io/badge/%20-Project%20Manager-%235277C3?logo=nixos&labelColor=%23cccccc)](https://sellout.github.io/project-manager/)

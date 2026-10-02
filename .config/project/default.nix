@@ -76,12 +76,12 @@
             if
               ## GHC before 8.4 needs an older Ubuntu
               lib.versionOlder ghc "8.4"
-              && sys == "ubuntu-24.04"
+              && sys == "ubuntu-26.04"
               ## GHC doesn’t support ARM before GHC 9.2.
               || lib.versionOlder ghc "9.2"
-              && builtins.elem sys ["macos-15" "ubuntu-24.04-arm"]
+              && builtins.elem sys ["macos-26" "ubuntu-26.04-arm"]
               ## GHC 9.2.1 relied on libnuma at runtime for aarch64
-              || ghc == "9.2.1" && sys == "ubuntu-24.04-arm"
+              || ghc == "9.2.1" && sys == "ubuntu-26.04-arm"
             then []
             else [
               "build (${ghc}, ${sys})"

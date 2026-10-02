@@ -19,6 +19,8 @@ If that’s too inflexible for you, 1. open an issue (or PR) and 2. use one of t
 - [`XDG.BaseDirectory.IO`](./src/XDG/BaseDirectory/IO.hs) has a similar interface, but doesn’t enforce the program subdirectory.
 - [`XDG.BaseDirectory`](./src/XDG/BaseDirectory.hs) exposes the base directories directly, allowing you to do pretty much anything.
 
+The companion XDG user directories spec (the one behind `user-dirs.dirs`) is a separate spec, and lives in a separate package: [xdg-user-directory](https://github.com/sellout/xdg-user-directory), which depends on this one.
+
 ### lower-level
 
 For particular use cases, you might need deeper access to things.

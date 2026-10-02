@@ -100,9 +100,7 @@
   services.haskell-ci = {
     inherit (self.lib) defaultGhcVersion;
     ghcVersions = self.lib.nonNixTestedGhcVersions;
-    cabalPackages = {
-      xdg-base-directory = "core";
-    };
+    cabalPackages = {xdg-base-directory = "core";};
     ## The latest Stackage LTS that we also build on GitHub for.
     latestGhcVersion = "9.10.1";
   };

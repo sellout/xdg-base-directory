@@ -93,7 +93,9 @@
     },
     "flaky": {
       "inputs": {
-        "astrolabe-hook": "astrolabe-hook",
+        "astrolabe-hook": [
+          "astrolabe-hook"
+        ],
         "bash-strict-mode": "bash-strict-mode",
         "flake-utils": "flake-utils",
         "home-manager": "home-manager",
@@ -404,6 +406,7 @@
     },
     "root": {
       "inputs": {
+        "astrolabe-hook": "astrolabe-hook",
         "flake-utils": [
           "flaky",
           "flake-utils"

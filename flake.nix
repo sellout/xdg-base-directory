@@ -29,11 +29,18 @@
 
   inputs = {
     ## Flaky should generally be the source of truth for its inputs.
-    flaky.url = "github:sellout/flaky";
+    flaky = {
+      inputs.astrolabe-hook.follows = "astrolabe-hook";
+      url = "github:sellout/flaky";
+    };
 
     flake-utils.follows = "flaky/flake-utils";
     nixpkgs.follows = "flaky/nixpkgs";
     systems.follows = "flaky/systems";
+
+    ## This has no effect on its own. Astrolabe overrides it locally to graft
+    ## task-local checkouts of our dependencies into the package set.
+    astrolabe-hook.url = "github:sellout/astrolabe-nix-hook";
 
     flaky-haskell = {
       inputs.flaky.follows = "flaky";

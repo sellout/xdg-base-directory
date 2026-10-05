@@ -15,6 +15,7 @@
 ### };
 ### checks.format = verify that code matches Ormolu expectations
 {
+  astrolabe-hook,
   flake-utils,
   flaky,
   flaky-haskell,
@@ -108,6 +109,8 @@ in
         nixpkgs.lib.composeManyExtensions [
           (pathway.overlays.haskell final prev)
           lintPlugins
+          ## Last, so that a task-local checkout wins over everything above.
+          (astrolabe-hook.overlays.haskell final prev)
         ];
     };
 

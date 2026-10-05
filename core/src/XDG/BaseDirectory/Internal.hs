@@ -36,7 +36,7 @@ import qualified "yaya" Yaya.Pattern as Strict
 --  __NB__: This is lacking `Ord` and `Read` instances because `IOError` is
 --          missing them.
 --
--- @since 0.0.1.0
+-- @since 99999
 data VarError
   = MissingVar String (Maybe IOError)
   | EmptyVar String
@@ -47,7 +47,7 @@ data VarError
 --  __NB__: This is lacking `Ord` and `Read` instances because
 --          `Dir.InternalFailure` is missing them.
 --
--- @since 0.0.1.0
+-- @since 99999
 data Error (rep :: Kind.Type)
   = Var VarError
   | NoDirectoriesFound -- only for directory lists
@@ -66,18 +66,18 @@ deriving stock instance (Show rep, Show (MP.Token rep)) => Show (Error rep)
 --       All paths set in these environment variables must be absolute.
 --       —[§2](https://specifications.freedesktop.org/basedir-spec/latest/#basics)
 --
--- @since 0.0.1.0
+-- @since 99999
 type BaseDirectory = Path 'Abs 'Dir :: Kind.Type -> Kind.Type
 
 -- | Convert a 'Maybe' to an 'Either' using the provided error for 'Nothing'.
 --
--- @since 0.0.1.0
+-- @since 99999
 note :: e -> Maybe a -> Either e a
 note e = maybe (Left e) pure
 
 -- | Extract an absolute path, returning an error if the path is relative.
 --
--- @since 0.0.1.0
+-- @since 99999
 extractAbs :: Path 'Any typ rep -> Either (Error rep) (Path 'Abs typ rep)
 extractAbs path =
   Strict.maybe (pure path {parents = ()}) (const $ Left RelativeDirectory) $

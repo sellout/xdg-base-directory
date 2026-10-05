@@ -13,6 +13,6 @@ import "this" Build_doctests (flags, module_sources, pkgs)
 
 -- | The test suite’s entry point.
 --
--- @since 0.0.1.0
+-- @since 99999
 main :: IO ()
 main = doctest $ flags <> pkgs <> module_sources

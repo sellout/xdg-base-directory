@@ -39,7 +39,7 @@ import "comonad" Control.Comonad (Comonad, duplicate, extract)
 --   produced with warnings, with `NotBut` representing a clean result and
 --   `Noted` being annotated with warnings.
 --
--- @since 0.0.1.0
+-- @since 99999
 data Annotated (a :: Kind.Type) (b :: Kind.Type) = NotBut b | Noted a b
   deriving stock (Eq, Generic, Ord, Read, Show)
   deriving stock (Foldable, Functor, Generic1, Traversable)
@@ -64,7 +64,7 @@ instance Bitraversable Annotated where
 -- | Case analysis for 'Annotated'. The first function handles the unannotated
 --   case ('NotBut'), the second handles the annotated case ('Noted').
 --
--- @since 0.0.1.0
+-- @since 99999
 annotated :: (b -> c) -> (a -> b -> c) -> Annotated a b -> c
 annotated f g = \case
   NotBut b -> f b
@@ -72,7 +72,7 @@ annotated f g = \case
 
 -- | A more general version of `<>` for `Annotated`.
 --
--- @since 0.0.1.0
+-- @since 99999
 combineAnnotated ::
   (a -> a -> a) ->
   (b -> c -> d) ->

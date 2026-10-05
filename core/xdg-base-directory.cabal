@@ -3,7 +3,7 @@ cabal-version: 3.0
 --   exception.
 
 name: xdg-base-directory
-version: 0.0.1.0
+version: 0.0.0.0
 synopsis: A faithful implementation of the XDG Base Directory spec
 description:
   This tries to capture the spec as precisely as possible, and gives the user a

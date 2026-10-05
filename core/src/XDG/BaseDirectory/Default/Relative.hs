@@ -29,30 +29,30 @@ import "pathway" Data.Path.TH (posix)
 
 -- | Default relative path for user-specific data files: @.local\/share\/@.
 --
--- @since 0.0.1.0
+-- @since 99999
 dataHome :: (IsString rep) => Path ('Rel 'False) 'Dir rep
 dataHome = [posix|.local/share/|]
 
 -- | Default relative path for user-specific configuration files: @.config\/@.
 --
--- @since 0.0.1.0
+-- @since 99999
 configHome :: (IsString rep) => Path ('Rel 'False) 'Dir rep
 configHome = [posix|.config/|]
 
 -- | Default relative path for user-specific state data: @.local\/state\/@.
 --
--- @since 0.0.1.0
+-- @since 99999
 stateHome :: (IsString rep) => Path ('Rel 'False) 'Dir rep
 stateHome = [posix|.local/state/|]
 
 -- | Default relative path for user-specific cache files: @.cache\/@.
 --
--- @since 0.0.1.0
+-- @since 99999
 cacheHome :: (IsString rep) => Path ('Rel 'False) 'Dir rep
 cacheHome = [posix|.cache/|]
 
 -- | Default relative path for user-specific executables: @.local\/bin\/@.
 --
--- @since 0.0.1.0
+-- @since 99999
 binHome :: (IsString rep) => Path ('Rel 'False) 'Dir rep
 binHome = [posix|.local/bin/|]

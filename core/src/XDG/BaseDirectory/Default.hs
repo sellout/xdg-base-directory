@@ -63,6 +63,8 @@ dataHome,
 --       If @$XDG_DATA_HOME@ is either not set or empty, a default equal to
 --       @$HOME@/.local/share should be used.”
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
+--
+-- @since 99999
 dataHome = pinHome Relative.dataHome
 
 -- |
@@ -70,10 +72,18 @@ dataHome = pinHome Relative.dataHome
 --       If @$XDG_CONFIG_HOME@ is either not set or empty, a default equal to
 --       @$HOME@/.config should be used.
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
+--
+-- @since 99999
 configHome = pinHome Relative.configHome
 
+-- |
+--
+-- @since 99999
 stateHome = pinHome Relative.stateHome
 
+-- |
+--
+-- @since 99999
 cacheHome = pinHome Relative.cacheHome
 
 -- |
@@ -94,6 +104,8 @@ cacheHome = pinHome Relative.cacheHome
 --       kept in mind.
 --
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
+--
+-- @since 99999
 binHome = pinHome Relative.binHome
 
 dataDirs, configDirs :: (IsString rep) => NonEmpty (BaseDirectory rep)
@@ -103,6 +115,8 @@ dataDirs, configDirs :: (IsString rep) => NonEmpty (BaseDirectory rep)
 --        If @$XDG_DATA_DIRS@ is either not set or empty, a value equal to
 --        /usr/local/share/:/usr/share/ should be used.
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
+--
+-- @since 99999
 dataDirs = [posix|/usr/local/share/|] :| [[posix|/usr/share/|]]
 
 -- |
@@ -110,6 +124,8 @@ dataDirs = [posix|/usr/local/share/|] :| [[posix|/usr/share/|]]
 --        If @$XDG_CONFIG_DIRS@ is either not set or empty, a value equal to
 --        /etc/xdg should be used.
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
+--
+-- @since 99999
 configDirs = pure [posix|/etc/xdg/|]
 
 datadir, sysconfdir :: (IsString rep) => BaseDirectory rep
@@ -120,6 +136,8 @@ datadir, sysconfdir :: (IsString rep) => BaseDirectory rep
 --       @$datadir@ defaulting to /usr/share.
 --
 --       —[§4](https://specifications.freedesktop.org/basedir-spec/latest/#referencing)
+--
+-- @since 99999
 datadir = [posix|/usr/share/|]
 
 -- |
@@ -129,4 +147,6 @@ datadir = [posix|/usr/share/|]
 --       /etc.
 --
 --       —[§4](https://specifications.freedesktop.org/basedir-spec/latest/#referencing)
+--
+-- @since 99999
 sysconfdir = [posix|/etc/|]

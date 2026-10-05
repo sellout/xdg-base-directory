@@ -76,6 +76,8 @@ dataHome,
 --       files should be written. This directory is defined by the environment
 --       variable @$XDG_DATA_HOME@.
 --       —[§2](https://specifications.freedesktop.org/basedir-spec/latest/#basics)
+--
+-- @since 99999
 dataHome = get Var.dataHome
 
 -- |
@@ -84,6 +86,8 @@ dataHome = get Var.dataHome
 --       configuration files should be written. This directory is defined by the
 --       environment variable @$XDG_CONFIG_HOME@.
 --       —[§2](https://specifications.freedesktop.org/basedir-spec/latest/#basics)
+--
+-- @since 99999
 configHome = get Var.configHome
 
 -- |
@@ -92,6 +96,8 @@ configHome = get Var.configHome
 --       data should be written. This directory is defined by the environment
 --       variable @$XDG_STATE_HOME@.
 --       —[§2](https://specifications.freedesktop.org/basedir-spec/latest/#basics)
+--
+-- @since 99999
 stateHome = get Var.stateHome
 
 -- |
@@ -100,6 +106,8 @@ stateHome = get Var.stateHome
 --       non-essential (cached) data should be written. This directory is
 --       defined by the environment variable @$XDG_CACHE_HOME@.
 --       —[§2](https://specifications.freedesktop.org/basedir-spec/latest/#basics)
+--
+-- @since 99999
 cacheHome = get Var.cacheHome
 
 -- |
@@ -149,6 +157,8 @@ cacheHome = get Var.cacheHome
 --            into place). This is because to truly be atomic, the source and
 --            destination must be on the same file system (or at least the same
 --            device). "System.Path" provides operations for this use case.
+--
+-- @since 99999
 runtimeDir = get Var.runtimeDir
 
 dataDirs,
@@ -162,6 +172,8 @@ dataDirs,
 --       data files should be searched. This set of directories is defined by
 --       the environment variable @$XDG_DATA_DIRS@.
 --       —[§2](https://specifications.freedesktop.org/basedir-spec/latest/#basics)
+--
+-- @since 99999
 dataDirs = getMultiple Var.dataDirs
 
 -- |
@@ -170,6 +182,8 @@ dataDirs = getMultiple Var.dataDirs
 --       configuration files should be searched. This set of directories is
 --       defined by the environment variable @$XDG_CONFIG_DIRS@.
 --       —[§2](https://specifications.freedesktop.org/basedir-spec/latest/#basics)
+--
+-- @since 99999
 configDirs = getMultiple Var.configDirs
 
 datadir,
@@ -186,6 +200,8 @@ datadir,
 --       @$datadir@ defaulting to /usr/share.
 --
 --       —[§4](https://specifications.freedesktop.org/basedir-spec/latest/#referencing)
+--
+-- @since 99999
 datadir = fmap parseDir . Text.encodeString =<< Make.getDataDir
 
 -- |
@@ -199,4 +215,6 @@ datadir = fmap parseDir . Text.encodeString =<< Make.getDataDir
 --       /etc.
 --
 --       —[§4](https://specifications.freedesktop.org/basedir-spec/latest/#referencing)
+--
+-- @since 99999
 sysconfdir = fmap parseDir . Text.encodeString =<< Make.getSysconfDir

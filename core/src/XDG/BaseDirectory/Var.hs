@@ -41,6 +41,9 @@ import "base" Text.Show (Show)
 import safe qualified "pathway-system" System.Text as Text
 import "this" XDG.BaseDirectory.Internal (VarError (EmptyVar, MissingVar), note)
 
+-- |
+--
+-- @since 99999
 newtype EnvironmentVariable = EnvVar String
   deriving stock (Eq, Generic, Ord, Read, Show)
 
@@ -50,6 +53,8 @@ envVar = EnvVar
 -- | The spec says “If [a variable] is either not set or empty, a default […]
 --   should be used.” This makes sure we handle all environment variables that
 --   way.
+--
+-- @since 99999
 lookupNonEmptyEnv ::
   (Text.Rep rep) => EnvironmentVariable -> IO (Either VarError rep)
 lookupNonEmptyEnv (EnvVar varName) =
@@ -79,6 +84,8 @@ dataHome,
 --       @$XDG_DATA_HOME@ defines the base directory relative to which
 --       user-specific data files should be stored.
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
+--
+-- @since 99999
 dataHome = envVar "XDG_DATA_HOME"
 
 -- |
@@ -91,6 +98,8 @@ dataHome = envVar "XDG_DATA_HOME"
 --       @$XDG_CONFIG_HOME@ defines the base directory relative to which
 --       user-specific configuration files should be stored.
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
+--
+-- @since 99999
 configHome = envVar "XDG_CONFIG_HOME"
 
 -- |
@@ -103,6 +112,8 @@ configHome = envVar "XDG_CONFIG_HOME"
 --       @$XDG_STATE_HOME@ defines the base directory relative to which
 --       user-specific state files should be stored.
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
+--
+-- @since 99999
 stateHome = envVar "XDG_STATE_HOME"
 
 -- |
@@ -111,6 +122,8 @@ stateHome = envVar "XDG_STATE_HOME"
 --       which data files should be searched. This set of directories is defined
 --       by the environment variable @$XDG_DATA_DIRS@.
 --       —[§2](https://specifications.freedesktop.org/basedir-spec/latest/#basics)
+--
+-- @since 99999
 dataDirs = envVar "XDG_DATA_DIRS"
 
 -- |
@@ -119,6 +132,8 @@ dataDirs = envVar "XDG_DATA_DIRS"
 --       which configuration files should be searched. This set of directories
 --       is defined by the environment variable @$XDG_CONFIG_DIRS@.
 --       —[§2](https://specifications.freedesktop.org/basedir-spec/latest/#basics)
+--
+-- @since 99999
 configDirs = envVar "XDG_CONFIG_DIRS"
 
 -- |
@@ -131,6 +146,8 @@ configDirs = envVar "XDG_CONFIG_DIRS"
 --       @$XDG_DATA_HOME@ defines the base directory relative to which
 --       user-specific data files should be stored.
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
+--
+-- @since 99999
 cacheHome = envVar "XDG_CACHE_HOME"
 
 -- |
@@ -139,4 +156,6 @@ cacheHome = envVar "XDG_CACHE_HOME"
 --       runtime files and other file objects should be placed. This directory
 --       is defined by the environment variable @$XDG_RUNTIME_DIR@.
 --       —[§2](https://specifications.freedesktop.org/basedir-spec/latest/#basics)
+--
+-- @since 99999
 runtimeDir = envVar "XDG_RUNTIME_DIR"

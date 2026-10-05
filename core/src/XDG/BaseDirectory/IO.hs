@@ -160,6 +160,8 @@ import safe "this" XDG.BaseDirectory.Internal (BaseDirectory, Error, VarError)
 
 -- | The types of file that live /only/ in the user’s home directory and can be
 --   read & written arbitrarily.
+--
+-- @since 99999
 data User = Cache | State
   deriving stock (Eq, Generic, Ord, Read, Show)
 
@@ -181,9 +183,14 @@ resolveUser = \case
 -- - they can be read “in aggregate” – receiving a sequence of handles in order
 --   of decreasing importance (later entries may either be ignored or contribute
 --   to the final result).
+--
+-- @since 99999
 data Aggregate = Config | Data
   deriving stock (Eq, Generic, Ord, Read, Show)
 
+-- |
+--
+-- @since 99999
 type SystemDirWarnings (rep :: Kind.Type) =
   V '[VarError, [Error rep]] :: Kind.Type
 
@@ -191,6 +198,8 @@ type SystemDirWarnings (rep :: Kind.Type) =
 --   there was some failure in getting the system directories (but there’s
 --   always at least one system directory, even if we had to reach for the
 --   defaults).
+--
+-- @since 99999
 type AggregateDirWarnings (rep :: Kind.Type) =
   These
     -- failed to get the user directory
@@ -198,6 +207,9 @@ type AggregateDirWarnings (rep :: Kind.Type) =
     (SystemDirWarnings rep) ::
     Kind.Type
 
+-- |
+--
+-- @since 99999
 consAggregate ::
   Either
     (Error rep, V (Path.GetUserDirectoryFailure rep))
@@ -281,6 +293,8 @@ tracing f x = (\() -> x) <$> f x
 --       once every 6 hours of monotonic time or the 'sticky' bit should be set
 --       on the file.
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
+--
+-- @since 99999
 data InvalidRuntimeDir (rep :: Kind.Type)
   = -- |
     --       The directory MUST be owned by the user,
@@ -347,6 +361,9 @@ verifyRuntimeDir ::
 verifyRuntimeDir dir =
   bool (Left InvalidLifetime) (pure ()) <$> Path.doesExist dir
 
+-- |
+--
+-- @since 99999
 type WithFileFailure =
   Concat OpenFileFailure Path.MaybeParentCreationFailure :: [Kind.Type]
 
@@ -400,6 +417,8 @@ withFileRO filename action base =
 --     $ const pure
 -- :}
 -- Right (NotBut {handle: .../home/test-user/.local/state/myprogram/archive.db})
+--
+-- @since 99999
 withUserFile ::
   (MonadIO m, MonadMask m, Path.Rep rep, Text.Rep rep) =>
   User ->
@@ -419,6 +438,8 @@ withUserFile user filename mode action =
 --
 -- >>> withUserFileRO @IO @String State [posix|myprogram/archive.db|] $ const pure
 -- Right (NotBut (Left (DoesNotExistError .../home/test-user/.local/state/myprogram/archive.db: openFile: does not exist (No such file or directory))))
+--
+-- @since 99999
 withUserFileRO ::
   (MonadIO m, MonadMask m, Path.Rep rep, Text.Rep rep) =>
   User ->
@@ -483,6 +504,8 @@ foldDirs filename action dirs =
 --     $ pure . fmap snd
 -- :}
 -- NotBut (Noted (DoesNotExistError .../usr/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory) :| [DoesNotExistError .../home/test-user/.local/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory)]) [])
+--
+-- @since 99999
 withAggregateFiles ::
   (MonadIO m, MonadMask m, Path.Rep rep, Text.Rep rep) =>
   -- | What kinds of files we are reading.
@@ -511,6 +534,8 @@ withAggregateFiles aggregate filename action =
 --
 -- >>> withUserTargetFile @IO @String Config [posix|myprogram/settings.dhall|] False $ const pure
 -- Right (NotBut {handle: .../home/test-user/.config/myprogram/settings.dhall})
+--
+-- @since 99999
 withUserTargetFile ::
   (MonadIO m, MonadMask m, Path.Rep rep, Text.Rep rep) =>
   Aggregate ->
@@ -541,6 +566,9 @@ withUserTargetFile aggregate filename truncate action =
     <=< liftIO
     $ resolveUserAggregate aggregate
 
+-- |
+--
+-- @since 99999
 withSystemTargetFile ::
   (MonadIO m, MonadMask m, Path.Rep rep, Text.Rep rep) =>
   Aggregate ->
@@ -650,6 +678,8 @@ withRuntimeFile' withFile' _preserve filename fallback action =
 --     $ const pure
 -- :}
 -- Right {handle: .../var/run/user/0/myprogram/super-secret.age}
+--
+-- @since 99999
 withRuntimeFile ::
   (MonadIO m, MonadMask m, Path.Rep rep, Path.Operations rep 'Dir, Text.Rep rep) =>
   Path ('Rel 'False) 'File rep ->
@@ -673,6 +703,8 @@ withRuntimeFile filename mode preserve =
 --     $ const pure
 -- :}
 -- Left (DoesNotExistError .../var/run/user/0/myprogram/super-secret.age: openFile: does not exist (No such file or directory))
+--
+-- @since 99999
 withRuntimeFileRO ::
   (MonadIO m, MonadMask m, Path.Rep rep, Path.Operations rep 'Dir, Text.Rep rep) =>
   Path ('Rel 'False) 'File rep ->
@@ -694,6 +726,8 @@ withRuntimeFileRO =
 --
 -- >>> withExecutableFile "some-script.sh" True $ const pure
 -- NotBut (Right {handle: .../home/test-user/.local/bin/some-script.sh})
+--
+-- @since 99999
 withExecutableFile ::
   (MonadIO m, MonadMask m, Path.Rep rep, Text.Rep rep) =>
   -- | The name of the executable to write.
@@ -731,6 +765,8 @@ withExecutableFile filename truncate action =
       =<< liftIO binHome
 
 -- | `IOMode`, but restricted to modes that involve writing.
+--
+-- @since 99999
 data IOWriteMode = WriteMode | AppendMode | ReadWriteMode
   deriving stock (Eq, Generic, Ord, Read, Show)
 

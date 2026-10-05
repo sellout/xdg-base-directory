@@ -173,6 +173,8 @@ import safe qualified "this" XDG.BaseDirectory.IO as XDG
 --
 --   Finally, the __Action__ is a function for manipulating the file handle(s)
 --   while they’re open.
+--
+-- @since 99999
 data Operations (m :: Kind.Type -> Kind.Type) (rep :: Kind.Type) = Operations
   { -- | Write (or read\/write) a file in either the `Cache` or `State` directory.
     withUserFile ::
@@ -323,6 +325,8 @@ type role Operations representational nominal
 --
 -- >>> withRuntimeFile xdgOps [posix|super-secret.age|] ReadWriteMode Nothing $ const pure
 -- Right {handle: .../var/run/user/0/super-secret.age}
+--
+-- @since 99999
 bleedingOperations ::
   (MonadIO m, MonadMask m, Path.Operations rep 'Dir, Path.Rep rep, Text.Rep rep) =>
   -- | A fallback directory to use for `withRuntimeFile` and `withRuntimeFileRO`
@@ -384,6 +388,8 @@ bleedingOperations runtimeFallback =
 --
 -- >>> withRuntimeFile myprogram [posix|super-secret.age|] ReadWriteMode Nothing $ const pure
 -- Right {handle: .../var/run/user/0/myprogram/super-secret.age}
+--
+-- @since 99999
 subdirOperations ::
   forall m rep.
   (MonadIO m, MonadMask m, Path.Operations rep 'Dir, Path.Rep rep, Text.Rep rep) =>

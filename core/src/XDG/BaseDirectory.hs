@@ -104,7 +104,15 @@ dataHome,
           (Error rep, V (Path.GetUserDirectoryFailure rep))
           (Annotated (Error rep) (BaseDirectory rep))
       )
+
+-- |
+--
+-- @since 99999
 dataHome = getOrDefault Default.dataHome Custom.dataHome
+
+-- |
+--
+-- @since 99999
 configHome = getOrDefault Default.configHome Custom.configHome
 
 -- |
@@ -119,8 +127,13 @@ configHome = getOrDefault Default.configHome Custom.configHome
 --       layout, open files, undo history, …)
 --
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
+--
+-- @since 99999
 stateHome = getOrDefault Default.stateHome Custom.stateHome
 
+-- |
+--
+-- @since 99999
 cacheHome = getOrDefault Default.cacheHome Custom.cacheHome
 
 dataDirs,
@@ -135,6 +148,8 @@ dataDirs,
 --       @$XDG_DATA_HOME@ base directory. The directories in @$XDG_DATA_DIRS@
 --       should be separated with a colon ':'.
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
+--
+-- @since 99999
 dataDirs =
   getMultipleOrDefault
     (traverse (traverse Text.encodeString) Default.dataDirs)
@@ -147,6 +162,8 @@ dataDirs =
 --       @$XDG_CONFIG_HOME@ base directory. The directories in
 --       @$XDG_CONFIG_DIRS@ should be separated with a colon ':'.
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
+--
+-- @since 99999
 configDirs =
   getMultipleOrDefault
     (traverse (traverse Text.encodeString) Default.configDirs)
@@ -177,6 +194,8 @@ datadir,
 --       @$datadir@ defaulting to /usr/share.
 --
 --       —[§4](https://specifications.freedesktop.org/basedir-spec/latest/#referencing)
+--
+-- @since 99999
 datadir = makeDir Default.datadir =<< Custom.datadir
 
 -- |
@@ -190,4 +209,6 @@ datadir = makeDir Default.datadir =<< Custom.datadir
 --       /etc.
 --
 --       —[§4](https://specifications.freedesktop.org/basedir-spec/latest/#referencing)
+--
+-- @since 99999
 sysconfdir = makeDir Default.sysconfdir =<< Custom.sysconfdir

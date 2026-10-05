@@ -187,7 +187,10 @@ common defaults
       -DSELLOUT_NOISY_DEPRECATIONS
   if flag(lint)
     build-depends:
-      no-recursion,
+      -- 0.2.0 is the first with the `ignore-methods` plugin option, and no
+      -- single release covers our whole `tested-with` range: 0.2.0 stops at
+      -- GHC 9.10, 0.4.0 starts at GHC 9.2.
+      no-recursion ^>= {0.2.0, 0.4.0},
     ghc-options:
       -fplugin=NoRecursion
     if impl(ghc >= 9.4)

@@ -27,14 +27,42 @@
 
   supportedSystems = import systems;
 
+  cabalProject = ../../cabal.project;
+
+  ## Nixpkgs pins no-recursion 0.1.2.3, which predates the `ignore-methods`
+  ## plugin option that `Data.Annotated` relies on to silence the recursive
+  ## default definitions of `sconcat` and `stimes`.
+  ##
+  ## TODO: Push this to Flaky, which is where every project gets its linting
+  ##       plugins from.
+  lintPlugins = _hfinal: hprev: {
+    no-recursion = hprev.callHackageDirect {
+      pkg = "no-recursion";
+      ver = "0.4.0.1";
+      sha256 = "sha256-sYHocSgSyzFVlRhBFRuuuzjckOpq+qHhTD8XNEHwxhA=";
+    } {};
+  };
+
+  ## NB: This inlines `flaky-haskell.lib.cabalProject2nix` so that it can pass
+  ##     `--flag=lint` to cabal2nix. Setting the flag only in `configureFlags`
+  ##     isn’t enough: the linting plugins are conditional on it, so cabal2nix
+  ##     doesn’t record them as dependencies unless it sees the flag itself,
+  ##     and the build then fails to find them.
+  ##
+  ## TODO: Have `cabalProject2nix` take cabal2nix options upstream, then drop
+  ##       this.
   cabalPackages = pkgs: hpkgs:
-    flaky-haskell.lib.cabalProject2nix
-    ../../cabal.project
-    pkgs
-    hpkgs
-    (old: {
-      configureFlags = old.configureFlags ++ ["--ghc-options=-Werror"];
-    });
+    builtins.mapAttrs
+    (name: path:
+      pkgs.shellchecked
+      ((hpkgs.callCabal2nixWithOptions name
+        (builtins.dirOf cabalProject + "/${path}")
+        "--flag=lint"
+        {})
+        .overrideAttrs (old: {
+        configureFlags = old.configureFlags ++ ["--ghc-options=-Werror"];
+      })))
+    (flaky-haskell.lib.parseCabalProject cabalProject);
 in
   {
     schemas = {
@@ -76,7 +104,11 @@ in
       ## NB: Dependencies that are overridden because they are broken in
       ##     Nixpkgs should be pushed upstream to Flaky. This is for
       ##     dependencies that we override for reasons local to the project.
-      haskellDependencies = pathway.overlays.haskell;
+      haskellDependencies = final: prev:
+        nixpkgs.lib.composeManyExtensions [
+          (pathway.overlays.haskell final prev)
+          lintPlugins
+        ];
     };
 
     homeConfigurations =

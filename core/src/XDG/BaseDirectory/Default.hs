@@ -78,10 +78,18 @@ configHome = pinHome Relative.configHome
 
 -- |
 --
+--       If @$XDG_STATE_HOME@ is either not set or empty, a default equal to
+--       @$HOME@/.local/state should be used.
+--       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
+--
 -- @since 99999
 stateHome = pinHome Relative.stateHome
 
 -- |
+--
+--       If @$XDG_CACHE_HOME@ is either not set or empty, a default equal to
+--       @$HOME@/.cache should be used.
+--       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
 --
 -- @since 99999
 cacheHome = pinHome Relative.cacheHome

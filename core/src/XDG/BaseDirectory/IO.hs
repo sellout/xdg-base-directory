@@ -66,9 +66,6 @@ module XDG.BaseDirectory.IO
     withAggregateFiles,
     withRuntimeFile,
     withRuntimeFileRO,
-
-    -- * utilities
-    consAggregate,
   )
 where
 
@@ -188,7 +185,8 @@ resolveUser = \case
 data Aggregate = Config | Data
   deriving stock (Eq, Generic, Ord, Read, Show)
 
--- |
+-- | This implies a failure to look up a system directory. Since system
+--   directories have static defaults (no @$HOME@), these are never fatal.
 --
 -- @since 99999
 type SystemDirWarnings (rep :: Kind.Type) =
@@ -207,9 +205,6 @@ type AggregateDirWarnings (rep :: Kind.Type) =
     (SystemDirWarnings rep) ::
     Kind.Type
 
--- |
---
--- @since 99999
 consAggregate ::
   Either
     (Error rep, V (Path.GetUserDirectoryFailure rep))
@@ -362,6 +357,16 @@ verifyRuntimeDir dir =
   bool (Left InvalidLifetime) (pure ()) <$> Path.doesExist dir
 
 -- |
+--
+--       If, when attempting to write a file, the destination directory is
+--       non-existent an attempt should be made to create it with permission
+--       @0700@. If the destination directory exists already the permissions
+--       should not be changed. The application should be prepared to handle the
+--       case where the file could not be written, either because the directory
+--       was non-existent and could not be created, or for any other reason. In
+--       such case it may choose to present an error message to the user.
+--
+--       —[§4](https://specifications.freedesktop.org/basedir-spec/latest/#referencing)
 --
 -- @since 99999
 type WithFileFailure =
@@ -566,7 +571,15 @@ withUserTargetFile aggregate filename truncate action =
     <=< liftIO
     $ resolveUserAggregate aggregate
 
--- |
+-- | This can only write to the targeted file. To read, use `withAggregateFiles`
+--   to access all of the related files.
+--
+--  __TODO__: This should warn if a `System` dir (`datadir` or `sysconfdir`)
+--            isn’t in the the corresponding aggregate list (@XDG_DATA_DIRS@ or
+--            @XDG_CONFIG_DIRS@, respectively).
+--
+-- >>> withSystemTargetFile @IO @String Config [posix|myprogram/settings.dhall|] False $ const pure
+-- NotBut (Right {handle: .../etc/myprogram/settings.dhall})
 --
 -- @since 99999
 withSystemTargetFile ::

@@ -41,7 +41,7 @@ import "base" Text.Show (Show)
 import safe qualified "pathway-system" System.Text as Text
 import "this" XDG.BaseDirectory.Internal (VarError (EmptyVar, MissingVar), note)
 
--- |
+-- | An opaque type for working with environment variables.
 --
 -- @since 99999
 newtype EnvironmentVariable = EnvVar String

@@ -177,6 +177,8 @@ import safe qualified "this" XDG.BaseDirectory.IO as XDG
 -- @since 99999
 data Operations (m :: Kind.Type -> Kind.Type) (rep :: Kind.Type) = Operations
   { -- | Write (or read\/write) a file in either the `Cache` or `State` directory.
+    --
+    -- @since 99999
     withUserFile ::
       forall a.
       User ->
@@ -193,6 +195,8 @@ data Operations (m :: Kind.Type -> Kind.Type) (rep :: Kind.Type) = Operations
             (Annotated (Error rep) a)
         ),
     -- | Read a file in either the `Cache` or `State` directory.
+    --
+    -- @since 99999
     withUserFileRO ::
       forall a.
       User ->
@@ -213,6 +217,8 @@ data Operations (m :: Kind.Type -> Kind.Type) (rep :: Kind.Type) = Operations
     --        directory should be used or, as another example, it could define
     --        rules for merging the information from the different files.
     --        —[§4](https://specifications.freedesktop.org/basedir-spec/0.8/#referencing)
+    --
+    -- @since 99999
     withAggregateFiles ::
       forall a.
       Aggregate ->
@@ -223,6 +229,19 @@ data Operations (m :: Kind.Type -> Kind.Type) (rep :: Kind.Type) = Operations
             (AggregateDirWarnings rep)
             (Annotated (NonEmpty (V OpenFileFailure)) a)
         ),
+    -- | This can only write to the targeted file. To read, use
+    --   `withAggregateFiles` to access all of the related files.
+    --
+    --   The available targeted files are
+    -- - `Config`
+    -- - `Data`
+    --
+    --  __FIXME__: This should probably use `IOWriteMode`, as we want to be able
+    --             to _modify_ existing files in these places, and there’s no
+    --             guarantee if we use `withAggregateFiles` that we will match
+    --             up with the corresponding file.
+    --
+    -- @since 99999
     withSystemTargetFile ::
       forall a.
       Aggregate ->
@@ -234,15 +253,15 @@ data Operations (m :: Kind.Type -> Kind.Type) (rep :: Kind.Type) = Operations
     --   `withAggregateFiles` to access all of the related files.
     --
     --   The available targeted files are
-    -- - `User` `Config`
-    -- - `System` `Config`
-    -- - `User` `Data`
-    -- - `System` `Data`
+    -- - `Config`
+    -- - `Data`
     --
     --  __FIXME__: This should probably use `IOWriteMode`, as we want to be able
     --             to _modify_ existing files in these places, and there’s no
     --             guarantee if we use `withAggregateFiles` that we will match
     --             up with the corresponding file.
+    --
+    -- @since 99999
     withUserTargetFile ::
       forall a.
       Aggregate ->
@@ -267,6 +286,8 @@ data Operations (m :: Kind.Type -> Kind.Type) (rep :: Kind.Type) = Operations
     --       it, since it might reside in runtime memory and cannot necessarily
     --       be swapped out to disk.
     --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
+    --
+    -- @since 99999
     withRuntimeFile ::
       forall a.
       Path ('Rel 'False) 'File rep ->
@@ -275,11 +296,24 @@ data Operations (m :: Kind.Type -> Kind.Type) (rep :: Kind.Type) = Operations
       (Path 'Abs 'File rep -> Handle -> m a) ->
       m (Either (V (InvalidRuntimeDir rep ': WithFileFailure)) a),
     -- | Open a temporary file read-only.
+    --
+    -- @since 99999
     withRuntimeFileRO ::
       forall a.
       Path ('Rel 'False) 'File rep ->
       (Path 'Abs 'File rep -> Handle -> m a) ->
       m (Either (V (InvalidRuntimeDir rep ': WithFileFailure)) a),
+    -- | Executables can only be written, not read. To /find/ an executable, you
+    --   should check the @PATH@ environment variable.
+    --
+    --       User-specific executable files may be stored in @$HOME@/.local/bin.
+    --       Distributions should ensure this directory shows up in the UNIX @$PATH@
+    --       environment variable, at an appropriate place.
+    --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
+    --
+    -- @since 99999
+    --
+    -- @since 99999
     withExecutableFile ::
       forall a.
       rep ->

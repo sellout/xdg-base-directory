@@ -107,10 +107,21 @@ dataHome,
 
 -- |
 --
+--       @$XDG_DATA_HOME@ defines the base directory relative to which user-
+--       specific data files should be stored. If @$XDG_DATA_HOME@ is either not
+--       set or empty, a default equal to @$HOME@/.local/share should be used.
+--       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
+--
 -- @since 99999
 dataHome = getOrDefault Default.dataHome Custom.dataHome
 
 -- |
+--
+--       @$XDG_CONFIG_HOME@ defines the base directory relative to which user-
+--       specific configuration files should be stored. If @$XDG_CONFIG_HOME@ is
+--       either not set or empty, a default equal to @$HOME@/.config should be
+--       used.
+--       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
 --
 -- @since 99999
 configHome = getOrDefault Default.configHome Custom.configHome
@@ -133,6 +144,12 @@ stateHome = getOrDefault Default.stateHome Custom.stateHome
 
 -- |
 --
+--       @$XDG_CACHE_HOME@ defines the base directory relative to which user-
+--       specific non-essential data files should be stored. If
+--       @$XDG_CACHE_HOME@ is either not set or empty, a default equal to
+--       @$HOME@/.cache should be used.
+--       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
+--
 -- @since 99999
 cacheHome = getOrDefault Default.cacheHome Custom.cacheHome
 
@@ -143,7 +160,7 @@ dataDirs,
 
 -- |
 --
---        @$XDG_DATA_DIRS@ defines the preference-ordered set of base
+--       @$XDG_DATA_DIRS@ defines the preference-ordered set of base
 --       directories to search for data files in addition to the
 --       @$XDG_DATA_HOME@ base directory. The directories in @$XDG_DATA_DIRS@
 --       should be separated with a colon ':'.
@@ -157,7 +174,7 @@ dataDirs =
 
 -- |
 --
---        @$XDG_CONFIG_DIRS@ defines the preference-ordered set of base
+--       @$XDG_CONFIG_DIRS@ defines the preference-ordered set of base
 --       directories to search for configuration files in addition to the
 --       @$XDG_CONFIG_HOME@ base directory. The directories in
 --       @$XDG_CONFIG_DIRS@ should be separated with a colon ':'.

@@ -17,6 +17,8 @@ license-files:
   LICENSE.AGPL-3.0-only
   LICENSE.Universal-FOSS-exception-1.0
   LICENSE.proprietary
+extra-source-files:
+  henforcer.toml
 category: Filesystem, XDG
 build-type: Custom
 extra-doc-files:

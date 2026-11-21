@@ -7,7 +7,7 @@ version: 0.0.0.0
 synopsis: A faithful implementation of the XDG Base Directory spec
 description:
   This tries to capture the spec as precisely as possible, and gives the user a
-  safe and simple API.
+  safe API that’s hard to misuse.
 maintainer: Greg Pfeil <greg@technomadic.org>
 author: Greg Pfeil <greg@technomadic.org>
 copyright: 2024 Greg Pfeil
@@ -17,10 +17,10 @@ license-files:
   LICENSE.AGPL-3.0-only
   LICENSE.Universal-FOSS-exception-1.0
   LICENSE.proprietary
-extra-source-files:
-  henforcer.toml
 category: Filesystem, XDG
 build-type: Custom
+extra-source-files:
+  henforcer.toml
 extra-doc-files:
   CHANGELOG.md
   README.md
@@ -57,17 +57,20 @@ source-repository this
 
 custom-setup
   setup-depends:
-    -- TODO: Due to haskell/cabal#3751, `Cabal` has to be specified even though
+    -- WAIT: Due to haskell/cabal#3751, `Cabal` has to be specified even though
     --       there’s no direct dependency. Its lower bound needs to be at least
     --       as high as `cabal-version` at the top of this file, and Hackage
     --       requires it to have _some_ upper bound. (Since there’s no direct
     --       dependency, it doesn’t use PVP bounds.)
     --
-    -- TODO: Due to haskell/cabal#9375, 3.10.3 is required in order to load
-    --       plugins from a `ghc-options` field. Unfortunately, GHCs prior to
-    --       9.8.3 include an older Cabal, so a newer one may need to be
-    --       manually installed.
-    Cabal >= 3.10.3 && < 99,
+    -- WAIT: Cabal 3.10 through 3.10.2 can’t load plugins from `ghc-options`
+    --       when registering a package, so they’re excluded. See
+    --       haskell/cabal#9375.
+    --
+    -- NOTE: Only registering the package into the store exercises this, which
+    --       is to say consuming it as a dependency. Building it on its own
+    --       cannot, so a green build without the exclusion means nothing.
+    Cabal (>= 3.0.0 && < 3.10) || (>= 3.10.3 && < 99),
     base ^>= {4.12.0, 4.13.0, 4.14.0, 4.15.0, 4.16.0, 4.17.0, 4.18.0, 4.19.0, 4.20.0, 4.21.0, 4.22.0},
     cabal-doctest ^>= {1.0.0},
 
@@ -85,8 +88,8 @@ flag noisy-deprecations
 
 flag lint
   description:
-    Compile with linting plugins enabled. This is intended for developers of
-    this package.
+    Build with linting plugins enabled. This is intended for developers of this
+    package.
   default: False
   -- Because disabling this flag won’t help the solver.
   manual: True
@@ -148,13 +151,15 @@ common defaults
     ghc-compat-plugin ^>= {0.1.0},
   ghc-options:
     -Weverything
-    -- This one just reports unfixable things, AFAICT.
-    -Wno-all-missed-specialisations
     -- Type inference good.
     -Wno-missing-local-signatures
     -- Warns even when `Unsafe` is explicit, not inferred. See
     -- https://gitlab.haskell.org/ghc/ghc/-/issues/16689
     -Wno-unsafe
+    -- These are re-enabled in cabal.project so we can address them (as much
+    -- as possible) without the remainder worrying users.
+    -Wno-all-missed-specialisations
+    -Wno-missed-specialisations
     -fplugin GhcCompat
     -fplugin-opt GhcCompat:minVersion=8.6.1
     -fplugin-opt GhcCompat:reportIncompatibleExtensions=error
@@ -189,13 +194,10 @@ common defaults
       -DSELLOUT_NOISY_DEPRECATIONS
   if flag(lint)
     build-depends:
-      -- 0.2.0 is the first with the `ignore-methods` plugin option, and no
-      -- single release covers our whole `tested-with` range: 0.2.0 stops at
-      -- GHC 9.10, 0.4.0 starts at GHC 9.2.
       no-recursion ^>= {0.2.0, 0.4.0},
     ghc-options:
-      -fplugin=NoRecursion
-    if impl(ghc >= 9.4)
+      -fplugin NoRecursion
+    if impl(ghc >= 9.4.5)
       build-depends:
         henforcer ^>= {1.0.0},
       ghc-options:
@@ -238,7 +240,7 @@ test-suite doctests
     tests
   main-is: doctests.hs
   build-depends:
-    doctest ^>= {0.16.0, 0.17.0, 0.18.0, 0.19.0, 0.20.0, 0.21.0, 0.22.0, 0.24.0},
+    doctest ^>= {0.16.0, 0.17.0, 0.18.0, 0.19.0, 0.20.0, 0.21.0, 0.22.0, 0.24.0, 0.25.0},
     pathway ^>= {0.0.1},
     pathway-compat-directory,
     pathway-compat-temporary ^>= {0.0.1},
@@ -250,6 +252,10 @@ test-suite doctests
       -- to ensure it gets built before this test-suite, even though the package
       -- appears to be unused.
       -Wno-unused-packages
+  -- NB: Adjust this to contain any components that may have doctests (including
+  --     executables).
+  x-doctest-components:
+    lib
   -- TODO: The sections below here are necessary because we don’t have control
   --       over the generated `Build_doctests.hs` file. So we have to silence
   --       all of its warnings one way or another.

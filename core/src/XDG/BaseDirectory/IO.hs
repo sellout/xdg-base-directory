@@ -260,7 +260,8 @@ resolveSystemAggregate = \case
 tracing :: (Functor m) => (a -> m ()) -> a -> m a
 tracing f x = (\() -> x) <$> f x
 
--- |
+-- | An error that occurs while validating various properties of the requsted
+--   runtime directory.
 --
 --       @$XDG_RUNTIME_DIR@ defines the base directory relative to which
 --       user-specific non-essential runtime files and other file objects (such
@@ -356,7 +357,7 @@ verifyRuntimeDir ::
 verifyRuntimeDir dir =
   bool (Left InvalidLifetime) (pure ()) <$> Path.doesExist dir
 
--- |
+-- | Failures that can occur when writing or appending files.
 --
 --       If, when attempting to write a file, the destination directory is
 --       non-existent an attempt should be made to create it with permission
@@ -412,7 +413,8 @@ withFileRO filename action base =
   let filepath = base </> filename
    in Path.withFile filepath IO.ReadMode $ action filepath
 
--- |
+-- | Like `System.IO.withFile`, but restricted to writing files in a `User`
+--   directory.
 --
 -- >>> :{
 --   withUserFile @IO @String
@@ -439,7 +441,8 @@ withUserFile user filename mode action =
     <=< liftIO
     $ resolveUser user
 
--- |
+-- | Like `System.IO.withFile`, but restricted to reading files from a `User`
+--   directory.
 --
 -- >>> withUserFileRO @IO @String State [posix|myprogram/archive.db|] $ const pure
 -- Right (NotBut (Left (DoesNotExistError .../home/test-user/.local/state/myprogram/archive.db: openFile: does not exist (No such file or directory))))
@@ -646,7 +649,8 @@ withRuntimeFile' withFile' _preserve filename fallback action =
   )
     =<< liftIO runtimeDir
 
--- |
+-- | Like `System.IO.withFile`, but restricted to writing files in the runtime
+--   directory.
 --
 --       @$XDG_RUNTIME_DIR@ defines the base directory relative to which
 --       user-specific non-essential runtime files and other file objects (such
@@ -707,7 +711,8 @@ withRuntimeFile filename mode preserve =
     preserve
     filename
 
--- |
+-- | Like `System.IO.withFile`, but restricted to reading files from the runtime
+--   directory.
 --
 -- >>> :{
 --   withRuntimeFileRO @IO @String

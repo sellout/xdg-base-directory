@@ -105,11 +105,11 @@
         "systems": "systems"
       },
       "locked": {
-        "lastModified": 1795221039,
-        "narHash": "sha256-bIgV+iWeMl3p6TbMlY8ADr10HJlANYhLUGMQcFgrYnQ=",
+        "lastModified": 1795254972,
+        "narHash": "sha256-NOyF/YNMNkxLSdz1umxxTWIY9Ljk/KkeablORoPTLz4=",
         "owner": "sellout",
         "repo": "flaky",
-        "rev": "88dc007ddc65fafe6c0db7cf921fd3a72d299548",
+        "rev": "6d13f56372ea3800b9803345eeab6e4779c2438c",
         "type": "github"
       },
       "original": {
@@ -359,11 +359,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1795209026,
-        "narHash": "sha256-5G4ZRDk+cRpNQdpEoXhxW+uEFK6hTNr7cIqR256yYNk=",
+        "lastModified": 1795366045,
+        "narHash": "sha256-jAYKeel/F5kwaXTB0VeeoCeR6zbRAh4JZTiYerAsNTk=",
         "owner": "sellout",
         "repo": "pathway",
-        "rev": "da81c5e20aa8ec9a03ebd86cf6d8bc6893670226",
+        "rev": "6783c798882225518b1f681b9effa472ef352235",
         "type": "github"
       },
       "original": {

@@ -30,6 +30,7 @@ import "base" Data.Either (Either (Left))
 import "base" Data.Eq (Eq, (==))
 import "base" Data.Function (($))
 import "base" Data.Functor (fmap)
+import "base" Data.Kind qualified as Kind
 import "base" Data.Maybe (Maybe (Nothing))
 import "base" Data.Monoid (mempty)
 import "base" Data.Ord (Ord)
@@ -38,12 +39,13 @@ import "base" GHC.Generics (Generic)
 import "base" System.IO (IO)
 import "base" Text.Read (Read)
 import "base" Text.Show (Show)
-import safe qualified "pathway-system" System.Text as Text
+import "pathway-system" System.Text qualified as Text
 import "this" XDG.BaseDirectory.Internal (VarError (EmptyVar, MissingVar), note)
 
 -- | An opaque type for working with environment variables.
 --
 -- @since 99999
+type EnvironmentVariable :: Kind.Type
 newtype EnvironmentVariable = EnvVar String
   deriving stock (Eq, Generic, Ord, Read, Show)
 

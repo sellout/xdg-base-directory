@@ -42,12 +42,12 @@ import safe "base" Data.Maybe (maybe)
 import safe "base" Data.String (String)
 import safe "base" Data.Traversable (traverse)
 import safe "base" System.IO (IO)
-import safe qualified "pathway-system" System.Path as Path
-import safe qualified "pathway-system" System.Text as Text
+import safe "pathway-system" System.Path qualified as Path
+import safe "pathway-system" System.Text qualified as Text
 import "variant" Data.Variant (V, toVariant)
 import safe "this" Data.Annotated (Annotated (NotBut, Noted))
-import safe qualified "this" XDG.BaseDirectory.Custom as Custom
-import safe qualified "this" XDG.BaseDirectory.Default as Default
+import safe "this" XDG.BaseDirectory.Custom qualified as Custom
+import safe "this" XDG.BaseDirectory.Default qualified as Default
 import safe "this" XDG.BaseDirectory.Internal (BaseDirectory, Error, VarError)
 
 -- | The spec says

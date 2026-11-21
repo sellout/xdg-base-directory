@@ -132,15 +132,12 @@ in
       ## The versions that are older than those supported by Nix that we
       ## prefer to test against.
       nonNixTestedGhcVersions = [
-        # Yaya requires at least GHC 8.6.1.
-        "8.6.1"
-        "8.8.1"
+        # Pathway requires at least GHC 8.10.1.
         "8.10.1"
         "9.0.1"
         "9.2.1"
         "9.4.1"
         "9.6.1"
-        ## since `cabal-plan-bounds` doesn’t work under Nix
         "9.8.1"
         "9.10.1"
         "9.12.1"

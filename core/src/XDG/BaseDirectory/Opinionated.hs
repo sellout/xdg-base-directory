@@ -74,18 +74,18 @@ import safe "base" Control.Monad.IO.Class (MonadIO)
 import safe "base" Data.Bool (Bool (False))
 import safe "base" Data.Either (Either)
 import safe "base" Data.Function (flip)
-import safe qualified "base" Data.Kind as Kind
+import safe "base" Data.Kind qualified as Kind
 import safe "base" Data.List.NonEmpty (NonEmpty)
 import safe "base" Data.Maybe (Maybe)
 import safe "base" System.IO (Handle)
 import safe "exceptions" Control.Monad.Catch (MonadMask)
 import safe "pathway" Data.Path (Path, Relativity (Abs, Rel), Type (Dir, File), (</>))
-import safe qualified "pathway" Data.Path.Directory as Directory
+import safe "pathway" Data.Path.Directory qualified as Directory
 import safe "pathway-compat-base" System.IO.Pathway (OpenFileFailure)
-import safe qualified "pathway-system" System.Path as Path
-import safe qualified "pathway-system" System.Text as Text
+import safe "pathway-system" System.Path qualified as Path
+import safe "pathway-system" System.Text qualified as Text
 import "variant" Data.Variant (V)
-import qualified "variant" Data.Variant.Types as Variant
+import "variant" Data.Variant.Types qualified as Variant
 import safe "this" Data.Annotated (Annotated)
 import safe "this" XDG.BaseDirectory (BaseDirectory, Error)
 import safe "this" XDG.BaseDirectory.IO
@@ -96,7 +96,7 @@ import safe "this" XDG.BaseDirectory.IO
     User (Cache, State),
     WithFileFailure,
   )
-import safe qualified "this" XDG.BaseDirectory.IO as XDG
+import safe "this" XDG.BaseDirectory.IO qualified as XDG
 
 -- $setup
 -- >>> :seti -XQuasiQuotes
@@ -175,7 +175,8 @@ import safe qualified "this" XDG.BaseDirectory.IO as XDG
 --   while they’re open.
 --
 -- @since 99999
-data Operations (m :: Kind.Type -> Kind.Type) (rep :: Kind.Type) = Operations
+type Operations :: (Kind.Type -> Kind.Type) -> Kind.Type -> Kind.Type
+data Operations m rep = Operations
   { -- | Write (or read\/write) a file in either the `Cache` or `State` directory.
     --
     -- @since 99999

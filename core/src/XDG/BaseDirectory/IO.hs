@@ -81,9 +81,9 @@ import safe "base" Data.Foldable (Foldable, foldr, toList)
 import safe "base" Data.Function (($))
 import safe "base" Data.Functor (Functor, fmap, (<$>))
 import safe "base" Data.Functor.Compose (Compose (Compose), getCompose)
-import safe qualified "base" Data.Kind as Kind
+import safe "base" Data.Kind qualified as Kind
 import safe "base" Data.List.NonEmpty (NonEmpty)
-import safe qualified "base" Data.List.NonEmpty as NonEmpty
+import safe "base" Data.List.NonEmpty qualified as NonEmpty
 import safe "base" Data.Maybe (Maybe (Nothing))
 import safe "base" Data.Ord (Ord)
 import safe "base" Data.Traversable (Traversable, sequenceA, traverse)
@@ -91,16 +91,16 @@ import safe "base" Data.Tuple (curry, uncurry)
 import safe "base" Data.Word (Word16)
 import safe "base" GHC.Generics (Generic, Generic1)
 import safe "base" System.IO (Handle, IO, IOMode)
-import safe qualified "base" System.IO as IO
+import safe "base" System.IO qualified as IO
 import safe "base" Text.Read (Read)
 import safe "base" Text.Show (Show)
 import safe "exceptions" Control.Monad.Catch (MonadMask)
 import safe "pathway" Data.Path (Path, Relativity (Abs, Rel), Type (Dir, File), (</>))
-import safe qualified "pathway" Data.Path.Directory as Directory
-import safe qualified "pathway" Data.Path.File as File
+import safe "pathway" Data.Path.Directory qualified as Directory
+import safe "pathway" Data.Path.File qualified as File
 import safe "pathway-compat-base" System.IO.Pathway (OpenFileFailure)
-import safe qualified "pathway-system" System.Path as Path
-import safe qualified "pathway-system" System.Text as Text
+import safe "pathway-system" System.Path qualified as Path
+import safe "pathway-system" System.Text qualified as Text
 import safe "these" Data.These (These (That, These, This))
 import "variant" Data.Variant (V, liftVariant, toVariant, (:<))
 import "variant" Data.Variant.Types (Concat)
@@ -159,6 +159,7 @@ import safe "this" XDG.BaseDirectory.Internal (BaseDirectory, Error, VarError)
 --   read & written arbitrarily.
 --
 -- @since 99999
+type User :: Kind.Type
 data User = Cache | State
   deriving stock (Eq, Generic, Ord, Read, Show)
 
@@ -182,6 +183,7 @@ resolveUser = \case
 --   to the final result).
 --
 -- @since 99999
+type Aggregate :: Kind.Type
 data Aggregate = Config | Data
   deriving stock (Eq, Generic, Ord, Read, Show)
 
@@ -189,8 +191,8 @@ data Aggregate = Config | Data
 --   directories have static defaults (no @$HOME@), these are never fatal.
 --
 -- @since 99999
-type SystemDirWarnings (rep :: Kind.Type) =
-  V '[VarError, [Error rep]] :: Kind.Type
+type SystemDirWarnings :: Kind.Type -> Kind.Type
+type SystemDirWarnings rep = V '[VarError, [Error rep]]
 
 -- | `This` implies a failure to get the user directory, and `That` means
 --   there was some failure in getting the system directories (but there’s
@@ -198,12 +200,12 @@ type SystemDirWarnings (rep :: Kind.Type) =
 --   defaults).
 --
 -- @since 99999
-type AggregateDirWarnings (rep :: Kind.Type) =
+type AggregateDirWarnings :: Kind.Type -> Kind.Type
+type AggregateDirWarnings rep =
   These
     -- failed to get the user directory
     (Error rep `AndMaybe` V (Path.GetUserDirectoryFailure rep))
-    (SystemDirWarnings rep) ::
-    Kind.Type
+    (SystemDirWarnings rep)
 
 consAggregate ::
   Either
@@ -291,7 +293,8 @@ tracing f x = (\() -> x) <$> f x
 --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
 --
 -- @since 99999
-data InvalidRuntimeDir (rep :: Kind.Type)
+type InvalidRuntimeDir :: Kind.Type -> Kind.Type
+data InvalidRuntimeDir rep
   = -- |
     --       The directory MUST be owned by the user,
     --       —[§3](https://specifications.freedesktop.org/basedir-spec/latest/#variables)
@@ -370,8 +373,8 @@ verifyRuntimeDir dir =
 --       —[§4](https://specifications.freedesktop.org/basedir-spec/latest/#referencing)
 --
 -- @since 99999
-type WithFileFailure =
-  Concat OpenFileFailure Path.MaybeParentCreationFailure :: [Kind.Type]
+type WithFileFailure :: [Kind.Type]
+type WithFileFailure = Concat OpenFileFailure Path.MaybeParentCreationFailure
 
 -- |
 --
@@ -785,6 +788,7 @@ withExecutableFile filename truncate action =
 -- | `IOMode`, but restricted to modes that involve writing.
 --
 -- @since 99999
+type IOWriteMode :: Kind.Type
 data IOWriteMode = WriteMode | AppendMode | ReadWriteMode
   deriving stock (Eq, Generic, Ord, Read, Show)
 

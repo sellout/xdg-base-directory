@@ -27,8 +27,6 @@ extra-doc-files:
   docs/*.md
 tested-with:
   GHC == {
-    8.6.1,
-    8.8.1,
     8.10.1,
     9.0.1,
     9.2.1,
@@ -71,7 +69,7 @@ custom-setup
     --       is to say consuming it as a dependency. Building it on its own
     --       cannot, so a green build without the exclusion means nothing.
     Cabal (>= 3.0.0 && < 3.10) || (>= 3.10.3 && < 99),
-    base ^>= {4.12.0, 4.13.0, 4.14.0, 4.15.0, 4.16.0, 4.17.0, 4.18.0, 4.19.0, 4.20.0, 4.21.0, 4.22.0},
+    base ^>= {4.14.0, 4.15.0, 4.16.0, 4.17.0, 4.18.0, 4.19.0, 4.20.0, 4.21.0, 4.22.0},
     cabal-doctest ^>= {1.0.0},
 
 flag noisy-deprecations
@@ -110,7 +108,7 @@ common GHC2024
     DataKinds
     DeriveDataTypeable
     DeriveGeneric
-    -- DeriveLift -- uncomment if the oldest supported version is GHC 8.10.1+
+    DeriveLift
     DeriveTraversable
     DerivingStrategies
     DisambiguateRecordFields
@@ -122,7 +120,7 @@ common GHC2024
     GADTs
     GeneralizedNewtypeDeriving
     HexFloatLiterals
-    -- ImportQualifiedPost -- uncomment if the oldest supported version is GHC 8.10.1+
+    ImportQualifiedPost
     InstanceSigs
     LambdaCase
     MagicHash
@@ -138,7 +136,7 @@ common GHC2024
     RoleAnnotations
     ScopedTypeVariables
     StandaloneDeriving
-    -- StandaloneKindSignatures -- uncomment if the oldest supported version is GHC 8.10.1+
+    StandaloneKindSignatures
     TupleSections
     TypeApplications
     TypeOperators
@@ -147,7 +145,7 @@ common GHC2024
 common defaults
   import: GHC2024
   build-depends:
-    base ^>= {4.12.0, 4.13.0, 4.14.0, 4.15.0, 4.16.0, 4.17.0, 4.18.0, 4.19.0, 4.20.0, 4.21.0, 4.22.0},
+    base ^>= {4.14.0, 4.15.0, 4.16.0, 4.17.0, 4.18.0, 4.19.0, 4.20.0, 4.21.0, 4.22.0},
     ghc-compat-plugin ^>= {0.1.0},
   ghc-options:
     -Weverything
@@ -161,12 +159,8 @@ common defaults
     -Wno-all-missed-specialisations
     -Wno-missed-specialisations
     -fplugin GhcCompat
-    -fplugin-opt GhcCompat:minVersion=8.6.1
+    -fplugin-opt GhcCompat:minVersion=8.10.1
     -fplugin-opt GhcCompat:reportIncompatibleExtensions=error
-  if impl(ghc < 8.8.1)
-    ghc-options:
-      -- This used to warn even when `Safe` was explicit.
-      -Wno-safe
   default-extensions:
     BlockArguments
     DefaultSignatures
@@ -246,12 +240,6 @@ test-suite doctests
     pathway-compat-temporary ^>= {0.0.1},
     pathway-system ^>= {0.0.1},
     xdg-base-directory,
-  if impl(ghc >= 8.10.1)
-    ghc-options:
-      -- `doctest` requires the package containing the doctests as a dependency
-      -- to ensure it gets built before this test-suite, even though the package
-      -- appears to be unused.
-      -Wno-unused-packages
   -- NB: Adjust this to contain any components that may have doctests (including
   --     executables).
   x-doctest-components:
@@ -260,12 +248,17 @@ test-suite doctests
   --       over the generated `Build_doctests.hs` file. So we have to silence
   --       all of its warnings one way or another.
   ghc-options:
+    -Wno-missing-deriving-strategies
     -Wno-missing-export-lists
     -Wno-missing-import-lists
     -Wno-safe
-  if impl(ghc >= 8.8.1)
+    -- `doctest` requires the package containing the doctests as a dependency
+    -- to ensure it gets built before this test-suite, even though the package
+    -- appears to be unused.
+    -Wno-unused-packages
+  if impl(ghc >= 9.2.1)
     ghc-options:
-      -Wno-missing-deriving-strategies
+      -Wno-missing-kind-signatures
   default-extensions:
     -- Since we can’t add `{-# LANGUAGE Safe -#}` to the generated
     -- “Build_doctests.hs”, we set it here, and that means it has to match

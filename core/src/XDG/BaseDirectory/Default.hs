@@ -34,10 +34,10 @@ import safe "base" Data.Traversable (Traversable, traverse)
 import safe "base" System.IO (IO)
 import safe "pathway" Data.Path (Filename, Path, Relativity (Abs, Rel), (</>))
 import safe "pathway" Data.Path.TH (posix)
-import safe qualified "pathway-system" System.Path as Path
-import safe qualified "pathway-system" System.Text as Text
+import safe "pathway-system" System.Path qualified as Path
+import safe "pathway-system" System.Text qualified as Text
 import "variant" Data.Variant (V)
-import safe qualified "this" XDG.BaseDirectory.Default.Relative as Relative
+import safe "this" XDG.BaseDirectory.Default.Relative qualified as Relative
 import safe "this" XDG.BaseDirectory.Internal (BaseDirectory)
 
 pinHome ::
@@ -126,6 +126,7 @@ dataDirs, configDirs :: (IsString rep) => NonEmpty (BaseDirectory rep)
 --
 -- @since 99999
 dataDirs = [posix|/usr/local/share/|] :| [[posix|/usr/share/|]]
+{-# INLINEABLE dataDirs #-}
 
 -- |
 --
@@ -135,6 +136,7 @@ dataDirs = [posix|/usr/local/share/|] :| [[posix|/usr/share/|]]
 --
 -- @since 99999
 configDirs = pure [posix|/etc/xdg/|]
+{-# INLINEABLE configDirs #-}
 
 datadir, sysconfdir :: (IsString rep) => BaseDirectory rep
 
@@ -147,6 +149,7 @@ datadir, sysconfdir :: (IsString rep) => BaseDirectory rep
 --
 -- @since 99999
 datadir = [posix|/usr/share/|]
+{-# INLINEABLE datadir #-}
 
 -- |
 --

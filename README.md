@@ -1,13 +1,12 @@
 # xdg-base-directory
 
-[![built with garnix](https://img.shields.io/endpoint?url=https%3A%2F%2Fgarnix.io%2Fapi%2Fbadges%2Fsellout%2Fxdg-base-directory)](https://garnix.io/repo/sellout/xdg-base-directory)
 [![GitHub CI](https://github.com/sellout/xdg-base-directory/actions/workflows/build.yml/badge.svg)](https://github.com/sellout/xdg-base-directory/actions/workflows/build.yml)
 [![Nix CI](https://nix-ci.com/badge/gh:sellout:xdg-base-directory)](https://nix-ci.com/gh:sellout:xdg-base-directory)
 [![Project Manager](https://img.shields.io/badge/%20-Project%20Manager-%235277C3?logo=nixos&labelColor=%23cccccc)](https://sellout.github.io/project-manager/)
 
 A faithful implementation of the XDG Base Directory spec
 
-This tries to capture the spec as precisely as possible, and gives the user a safe and simple API.
+This tries to capture the spec as precisely as possible, and gives the user a safe API that’s hard to misuse.
 
 ## usage
 
@@ -15,7 +14,7 @@ See [the package README](./core/README.md) for usage information.
 
 ## building
 
-Especially if you are unfamiliar with the haskell ecosystem, there is a Nix build (both with and without a flake). If you are unfamiliar with Nix, [Nix adjacent](...) can help you get things working in the shortest time and least effort possible.
+Especially if you are unfamiliar with the Haskell ecosystem, there is a Nix build (both with and without a flake). If you are unfamiliar with Nix, [Nix adjacent](...) can help you get things working in the shortest time and least effort possible.
 
 ### if you have `nix` installed
 
@@ -31,7 +30,7 @@ This project is built with [Cabal](https://cabal.readthedocs.io/en/stable/index.
 
 ### environment
 
-We recommend the following steps to make working in this repository as easy as possible.
+We recommend the following steps to make working in this repository as smooth as possible.
 
 #### `direnv allow`
 
@@ -43,15 +42,15 @@ This will apply our repository-specific Git configuration to `git` commands run 
 
 ### CI failures
 
-There are a few jobs that may fail during CI and indicate specific changes that need to be made to your PR. If you run into any failures other than those that are listed here, they likely have remedies that are specific to your changes. If you need help replicating or resolving them, or think that they represent general patterns like the ones listed below, inform the maintainers. They can help you resolve them and decide if they should be called out with generic resolution processes.
+A few jobs may fail during CI and indicate specific changes that need to be made to your PR. If you run into any failures other than those that are listed here, they likely have remedies that are specific to your changes. If you need help replicating or resolving them, or think that they represent general patterns like the ones listed below, inform the maintainers. They can help you resolve them and decide if they should be called out with generic resolution processes.
 
 #### CI / check-bounds (check if bounds have changed)
 
 A failure in the “check if bounds have changed” step indicates that the bounds on direct dependencies have changed.
 
-It currently means that the discovered bounds have been restricted, which is always a breaking change. Unfortunately, this is sometimes not due to anything in the PR, but it does indicate we’re no longer testing the versions we used to – the Cabal solver will sometimes start choosing different packages, depending on releases. Due to the behavior of the solver, the most likely ones to change are in the middle of the range. There are a few ways to address this problem:
+It currently means that the discovered bounds have been restricted, which is always a breaking change. Unfortunately, this is sometimes not due to anything in the PR, but it does indicate we’re no longer testing the versions we used to – the Cabal solver will sometimes start choosing different packages, depending on releases. Due to the behavior of the solver, the most likely ones to change are in the middle of the range. You can address this problem in a few ways:
 
-1. Simply change the bounds as the output recommends, and make sure the PR bumps the major version number. If this change is already bumping the major version, this is probably the right choice to make.
+1. Change the bounds as the output recommends, and make sure the PR bumps the major version number. If this change is already bumping the major version, this is probably the right choice to make.
 2. Try to force Cabal to try the previous bounds. If you had manually changed the bounds because you needed some new feature, is it possible to conditionalize use of that feature so that we can also still use and test with older bounds?
 3. Tell CI that you want to keep the bounds the same even though they’re not tested. You do this by adding the old bound to the `extraDependencyVersions` list in flake.nix. This should be done carefully, but one use case is where those bounds _are_ tested by the Nix builds, but not by GitHub.
 
@@ -67,7 +66,7 @@ It’s tempting to think that moving a dependency from the transitive list to th
 
 #### check formatter
 
-There is some unformatted code (or perhaps some lint that needs addressing). If you use Nix, running `nix fmt` should automatically fix most of the formatting, and at least report additional lint that needs addressing.
+Some code is unformatted (or perhaps some lint needs addressing). If you use Nix, running `nix fmt` should automatically fix most of the formatting, and at least report additional lint that needs addressing.
 
 If you don’t use Nix, the CI log should contain some lines like
 

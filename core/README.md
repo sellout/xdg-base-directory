@@ -6,7 +6,7 @@
 
 A faithful implementation of [the XDG Base Directory spec](https://specifications.freedesktop.org/basedir-spec/latest/)
 
-This tries to capture the spec as precisely as possible, and gives the user a safe and simple API.
+This tries to capture the spec as precisely as possible, and gives the user a safe API that’s hard to misuse.
 
 ## usage
 
@@ -81,7 +81,7 @@ Perhaps partially because of its popularity, the XDG Base Directory spec has tak
 
 ### What files go where?
 
-The spec is fairly sparse with regard to explaining what belongs in each location. There are other, unofficial, sources that try to give more guidance.
+The spec is fairly sparse with regard to explaining what belongs in each location. Other, unofficial, sources try to give more guidance.
 
 ## versioning
 
@@ -133,7 +133,7 @@ A library _may_ declare that it always bumps the `A` component when it removes a
 
 #### restricting an existing dependency’s version range in any way
 
-Consumers have to contend not only with our version bounds, but also with those of other libraries. It’s possible that some dependency overlapped in a very narrow way, and even just restricting a particular patch version of a dependency could make it impossible to find a dependency solution.
+Consumers have to contend not only with our version bounds, but also with those of other libraries. It’s possible that some dependency overlapped in a narrow way, and even just restricting a particular patch version of a dependency could make it impossible to find a dependency solution.
 
 #### restricting the license in any way
 
@@ -199,12 +199,12 @@ Other projects similar to this one, and how they differ.
 
 ### in other languages
 
-#### Rust’s [xdg](https://crates.io/crates/xdg)
+#### Rust’s [`xdg`](https://crates.io/crates/xdg)
 
-#### Python’s [platformdirs](https://platformdirs.readthedocs.io/en/latest/)
+#### Python’s [`platformdirs`](https://platformdirs.readthedocs.io/en/latest/)
 
 #### Python’s [config-path](https://pypi.org/project/config-path/)
 
 - Only handles config files, not other file locations.
 
-#### Python’s deprecated [appdirs](https://pypi.org/project/appdirs/)
+#### Python’s deprecated [`appdirs`](https://pypi.org/project/appdirs/)

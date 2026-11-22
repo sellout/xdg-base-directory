@@ -72,26 +72,35 @@ in
           (flaky-haskell.lib.overlayHaskellPackages
             (map self.lib.nixifyGhcVersion
               (self.lib.supportedGhcVersions final.stdenv.hostPlatform.system))
-            (final: prev:
-              nixpkgs.lib.composeManyExtensions [
-                (flaky.overlays.haskellDependencies final prev)
-                (self.overlays.haskell final prev)
-                (self.overlays.haskellDependencies final prev)
-              ]))
+            self.overlays.haskell)
         ]
         final;
 
-      haskell = flaky-haskell.lib.haskellOverlay cabalPackages;
+      ## The full Haskell overlay.
+      haskell = final: prev:
+        nixpkgs.lib.composeManyExtensions [
+          (flaky.overlays.haskellDependencies final prev)
+          (self.overlays.haskellDependencies final prev)
+          (astrolabe-hook.overlays.haskell final prev)
+          (self.overlays.haskellLocal final prev)
+        ];
 
-      ## NB: Dependencies that are overridden because they are broken in
-      ##     Nixpkgs should be pushed upstream to Flaky. This is for
-      ##     dependencies that we override for reasons local to the project.
+      ## “Shallow” dependencies. This provides overrides for dependencies of
+      ## this package, without either the global Flaky dependencies or high-
+      ## priority Astrolabe overrides.
+      ##
+      ## NOTE: Dependencies that are overridden because they are broken in
+      ##       Nixpkgs should be pushed upstream to Flaky. This is for
+      ##       dependencies that we override for reasons local to the project.
       haskellDependencies = final: prev:
         nixpkgs.lib.composeManyExtensions [
+          (pathway.overlays.haskellDependencies final prev)
+          ## TODO: Change this to be `haskellLocal`.
           (pathway.overlays.haskell final prev)
-          ## Last, so that a task-local checkout wins over everything above.
-          (astrolabe-hook.overlays.haskell final prev)
         ];
+
+      ## The locally-defined Haskell packages.
+      haskellLocal = flaky-haskell.lib.haskellOverlay cabalPackages;
     };
 
     homeConfigurations =

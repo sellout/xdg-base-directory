@@ -202,16 +202,23 @@ library
   hs-source-dirs:
     src
   build-depends:
-    comonad,
-    exceptions,
-    megaparsec,
-    pathway,
-    pathway-compat-base,
-    pathway-internal,
-    pathway-system,
-    these,
-    variant,
-    yaya,
+    comonad ^>= {5.0.8},
+    exceptions ^>= {0.10.4},
+    megaparsec ^>= {9.0.1, 9.2.1, 9.5.0, 9.7.0, 9.8.3},
+    pathway ^>= {0.0.1},
+    pathway-compat-base ^>= {0.0.1},
+    pathway-internal ^>= {0.0.1},
+    pathway-system ^>= {0.0.1},
+    these ^>= {1.1.1, 1.2},
+    variant ^>= {1.0},
+    yaya ^>= {0.6.2, 0.7.0},
+  -- NOTE: Older Cabal releases trigger these in generated "Paths_*" modules.
+  if impl(ghc < 9.0.1)
+    ghc-options:
+      -Wno-missing-safe-haskell-mode
+  if impl(ghc < 9.4.1)
+    ghc-options:
+      -Wno-prepositive-qualified-module
   exposed-modules:
     Data.Annotated
     XDG.BaseDirectory
@@ -234,9 +241,9 @@ test-suite doctests
     tests
   main-is: doctests.hs
   build-depends:
-    doctest ^>= {0.16.0, 0.17.0, 0.18.0, 0.19.0, 0.20.0, 0.21.0, 0.22.0, 0.24.0, 0.25.0},
+    doctest ^>= {0.16.3, 0.18.1, 0.20.1, 0.21.1, 0.22.2, 0.24.0, 0.25.0},
     pathway ^>= {0.0.1},
-    pathway-compat-directory,
+    pathway-compat-directory ^>= {0.0.1},
     pathway-compat-temporary ^>= {0.0.1},
     pathway-system ^>= {0.0.1},
     xdg-base-directory,

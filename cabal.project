@@ -52,6 +52,16 @@ if impl(ghc >= 8.0.1)
       -Wwarn=all-missed-specialisations
       -Wwarn=missed-specialisations
 
+constraints:
+  -- 5.1.6 is the first release that’s @Safe@
+  free >= 5.1.6,
+  -- 1.2.1 is the first version with `getCanonicalTempDirectory` (only used in
+  -- testing, so candidate for weakening)
+  temporary >= 1.2.1,
+  -- These are the first yaya relases wihout `--package-trust`
+  yaya >= 0.6.2.2,
+  yaya-containers >= 0.1.2.1,
+
 if impl(ghc == 9.4.1)
   constraints:
     -- GHC 9.4.1’s specialiser panics when compiling newer `Cabal-syntax`

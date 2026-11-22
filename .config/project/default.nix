@@ -76,12 +76,32 @@
   ];
 
   ## CI
-  services.haskell-ci = {
+  services.haskell-ci = let
+    runners = config.services.github.runners.latest;
+  in {
     inherit (self.lib) defaultGhcVersion;
     ghcVersions = self.lib.nonNixTestedGhcVersions;
     cabalPackages = {"${config.project.name}" = "core";};
     ## The latest Stackage LTS that we also build on GitHub for.
     latestGhcVersion = "9.10.1";
+    ## Replace GHC 9.2.1 on macOS-arm64 with GHC 9.2.2, because 9.2.1 was bad at
+    ## ARM. “'ffitarget_arm64.h' file not found”
+    ##
+    ## TODO: I think this should move up to Flaky, next to the equivalent Linux
+    ##       replacement.
+    exclude = [
+      {
+        ghc = "9.2.1";
+        os = runners.macos-arm64;
+      }
+    ];
+    include =
+      map (bounds: {
+        inherit bounds;
+        ghc = "9.2.2";
+        os = runners.macos-arm64;
+      })
+      ["" "--prefer-oldest"];
   };
   services.nix-ci.allow-import-from-derivation = lib.mkForce true;
 

@@ -32,6 +32,7 @@ import "pathway" Data.Path.TH (posix)
 -- @since 99999
 dataHome :: (IsString rep) => Path ('Rel 'False) 'Dir rep
 dataHome = [posix|.local/share/|]
+{-# INLINEABLE dataHome #-}
 
 -- | Default relative path for user-specific configuration files: @.config\/@.
 --
@@ -44,6 +45,7 @@ configHome = [posix|.config/|]
 -- @since 99999
 stateHome :: (IsString rep) => Path ('Rel 'False) 'Dir rep
 stateHome = [posix|.local/state/|]
+{-# INLINEABLE stateHome #-}
 
 -- | Default relative path for user-specific cache files: @.cache\/@.
 --
@@ -56,3 +58,4 @@ cacheHome = [posix|.cache/|]
 -- @since 99999
 binHome :: (IsString rep) => Path ('Rel 'False) 'Dir rep
 binHome = [posix|.local/bin/|]
+{-# INLINEABLE binHome #-}

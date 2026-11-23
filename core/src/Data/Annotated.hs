@@ -23,7 +23,7 @@ import "base" Data.Eq (Eq)
 import "base" Data.Foldable (Foldable)
 import "base" Data.Function (const, ($))
 import "base" Data.Functor (Functor, (<$>))
-import qualified "base" Data.Kind as Kind
+import "base" Data.Kind qualified as Kind
 import "base" Data.Monoid (Monoid, mempty)
 import "base" Data.Ord (Ord)
 import "base" Data.Semigroup (Semigroup, (<>))
@@ -40,6 +40,7 @@ import "comonad" Control.Comonad (Comonad, duplicate, extract)
 --   `Noted` being annotated with warnings.
 --
 -- @since 99999
+type Annotated :: Kind.Type -> Kind.Type -> Kind.Type
 data Annotated (a :: Kind.Type) (b :: Kind.Type) = NotBut b | Noted a b
   deriving stock (Eq, Generic, Ord, Read, Show)
   deriving stock (Foldable, Functor, Generic1, Traversable)

@@ -32,16 +32,16 @@ import safe "base" Data.Either (Either (Left), either)
 import safe "base" Data.Functor (fmap, (<$>))
 import safe "base" System.IO (IO)
 import safe "pathway-compat-base" Common (InternalFailure (ParseFailure))
-import safe qualified "pathway-system" System.Path as Path
-import safe qualified "pathway-system" System.Text as Text
-import qualified "this" Paths_xdg_base_directory as Make
+import safe "pathway-system" System.Path qualified as Path
+import safe "pathway-system" System.Text qualified as Text
+import "this" Paths_xdg_base_directory qualified as Make
 import safe "this" XDG.BaseDirectory.Internal
   ( BaseDirectory,
     Error (Pathway, Var),
     VarError,
     extractAbs,
   )
-import safe qualified "this" XDG.BaseDirectory.Var as Var
+import safe "this" XDG.BaseDirectory.Var qualified as Var
 
 parseDir :: (Path.Rep rep) => rep -> Either (Error rep) (BaseDirectory rep)
 parseDir =

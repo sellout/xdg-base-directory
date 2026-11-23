@@ -1,7 +1,7 @@
 {
   "project":
     {
-      "description": "This tries to capture the spec as precisely as possible, and gives the user a safe and simple API.",
+      "description": "This tries to capture the spec as precisely as possible, and gives the user a safe API that’s hard to misuse.",
       "name": "xdg-base-directory",
       "repo": "sellout/xdg-base-directory",
       "summary": "A faithful implementation of the XDG Base Directory spec",

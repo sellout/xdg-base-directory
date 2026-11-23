@@ -28,42 +28,23 @@
 
   supportedSystems = import systems;
 
-  cabalProject = ../../cabal.project;
-
-  ## Nixpkgs pins no-recursion 0.1.2.3, which predates the `ignore-methods`
-  ## plugin option that `Data.Annotated` relies on to silence the recursive
-  ## default definitions of `sconcat` and `stimes`.
-  ##
-  ## TODO: Push this to Flaky, which is where every project gets its linting
-  ##       plugins from.
-  lintPlugins = _hfinal: hprev: {
-    no-recursion = hprev.callHackageDirect {
-      pkg = "no-recursion";
-      ver = "0.4.0.1";
-      sha256 = "sha256-sYHocSgSyzFVlRhBFRuuuzjckOpq+qHhTD8XNEHwxhA=";
-    } {};
-  };
-
-  ## NB: This inlines `flaky-haskell.lib.cabalProject2nix` so that it can pass
-  ##     `--flag=lint` to cabal2nix. Setting the flag only in `configureFlags`
-  ##     isn’t enough: the linting plugins are conditional on it, so cabal2nix
-  ##     doesn’t record them as dependencies unless it sees the flag itself,
-  ##     and the build then fails to find them.
-  ##
-  ## TODO: Have `cabalProject2nix` take cabal2nix options upstream, then drop
-  ##       this.
   cabalPackages = pkgs: hpkgs:
-    builtins.mapAttrs
-    (name: path:
-      pkgs.shellchecked
-      ((hpkgs.callCabal2nixWithOptions name
-        (builtins.dirOf cabalProject + "/${path}")
-        "--flag=lint"
-        {})
-        .overrideAttrs (old: {
-        configureFlags = old.configureFlags ++ ["--ghc-options=-Werror"];
-      })))
-    (flaky-haskell.lib.parseCabalProject cabalProject);
+    flaky-haskell.lib.cabalProject2nix
+    ../../cabal.project
+    pkgs
+    hpkgs
+    (old: {
+      ## These should match `program-options` in ../../cabal.project.
+      configureFlags =
+        old.configureFlags
+        ++ [
+          "--ghc-options=-Werror"
+          "--ghc-options=-Wall-missed-specialisations"
+          "--ghc-options=-Wmissed-specialisations"
+          "--ghc-options=-Wwarn=all-missed-specialisations"
+          "--ghc-options=-Wwarn=missed-specialisations"
+        ];
+    });
 in
   {
     schemas = {
@@ -90,28 +71,36 @@ in
           flaky.overlays.default
           (flaky-haskell.lib.overlayHaskellPackages
             (map self.lib.nixifyGhcVersion
-              (self.lib.supportedGhcVersions final.system))
-            (final: prev:
-              nixpkgs.lib.composeManyExtensions [
-                (flaky.overlays.haskellDependencies final prev)
-                (self.overlays.haskell final prev)
-                (self.overlays.haskellDependencies final prev)
-              ]))
+              (self.lib.supportedGhcVersions final.stdenv.hostPlatform.system))
+            self.overlays.haskell)
         ]
         final;
 
-      haskell = flaky-haskell.lib.haskellOverlay cabalPackages;
+      ## The full Haskell overlay.
+      haskell = final: prev:
+        nixpkgs.lib.composeManyExtensions [
+          (flaky.overlays.haskellDependencies final prev)
+          (self.overlays.haskellDependencies final prev)
+          (astrolabe-hook.overlays.haskell final prev)
+          (self.overlays.haskellLocal final prev)
+        ];
 
-      ## NB: Dependencies that are overridden because they are broken in
-      ##     Nixpkgs should be pushed upstream to Flaky. This is for
-      ##     dependencies that we override for reasons local to the project.
+      ## “Shallow” dependencies. This provides overrides for dependencies of
+      ## this package, without either the global Flaky dependencies or high-
+      ## priority Astrolabe overrides.
+      ##
+      ## NOTE: Dependencies that are overridden because they are broken in
+      ##       Nixpkgs should be pushed upstream to Flaky. This is for
+      ##       dependencies that we override for reasons local to the project.
       haskellDependencies = final: prev:
         nixpkgs.lib.composeManyExtensions [
+          (pathway.overlays.haskellDependencies final prev)
+          ## TODO: Change this to be `haskellLocal`.
           (pathway.overlays.haskell final prev)
-          lintPlugins
-          ## Last, so that a task-local checkout wins over everything above.
-          (astrolabe-hook.overlays.haskell final prev)
         ];
+
+      ## The locally-defined Haskell packages.
+      haskellLocal = flaky-haskell.lib.haskellOverlay cabalPackages;
     };
 
     homeConfigurations =
@@ -152,15 +141,12 @@ in
       ## The versions that are older than those supported by Nix that we
       ## prefer to test against.
       nonNixTestedGhcVersions = [
-        # Yaya requires at least GHC 8.6.1.
-        "8.6.1"
-        "8.8.1"
+        # Pathway requires at least GHC 8.10.1.
         "8.10.1"
         "9.0.1"
         "9.2.1"
         "9.4.1"
         "9.6.1"
-        ## since `cabal-plan-bounds` doesn’t work under Nix
         "9.8.1"
         "9.10.1"
         "9.12.1"

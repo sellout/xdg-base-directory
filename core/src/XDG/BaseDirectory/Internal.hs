@@ -17,19 +17,19 @@ import "base" Control.Applicative (pure)
 import "base" Data.Either (Either (Left))
 import "base" Data.Eq (Eq)
 import "base" Data.Function (const, ($))
-import qualified "base" Data.Kind as Kind
+import "base" Data.Kind qualified as Kind
 import "base" Data.Maybe (Maybe, maybe)
 import "base" Data.String (String)
 import "base" Data.Void (Void)
 import "base" GHC.Generics (Generic)
 import "base" System.IO.Error (IOError)
 import "base" Text.Show (Show)
-import qualified "megaparsec" Text.Megaparsec.Stream as MP
+import "megaparsec" Text.Megaparsec.Stream qualified as MP
 import "pathway" Data.Path (Path, Type (Dir))
 import "pathway" Data.Path.Relativity (Relativity (Abs, Any))
 import "pathway-compat-base" Common (InternalFailure)
 import "pathway-internal" Data.Path.Internal (parents)
-import qualified "yaya" Yaya.Pattern as Strict
+import "yaya" Yaya.Pattern qualified as Strict
 
 -- | Errors that can occur when reading an environment variable.
 --
@@ -37,6 +37,7 @@ import qualified "yaya" Yaya.Pattern as Strict
 --          missing them.
 --
 -- @since 99999
+type VarError :: Kind.Type
 data VarError
   = MissingVar String (Maybe IOError)
   | EmptyVar String
@@ -48,7 +49,8 @@ data VarError
 --          `Dir.InternalFailure` is missing them.
 --
 -- @since 99999
-data Error (rep :: Kind.Type)
+type Error :: Kind.Type -> Kind.Type
+data Error rep
   = Var VarError
   | NoDirectoriesFound -- only for directory lists
   | RelativeDirectory
@@ -67,7 +69,8 @@ deriving stock instance (Show rep, Show (MP.Token rep)) => Show (Error rep)
 --       —[§2](https://specifications.freedesktop.org/basedir-spec/latest/#basics)
 --
 -- @since 99999
-type BaseDirectory = Path 'Abs 'Dir :: Kind.Type -> Kind.Type
+type BaseDirectory :: Kind.Type -> Kind.Type
+type BaseDirectory = Path 'Abs 'Dir
 
 -- | Convert a 'Maybe' to an 'Either' using the provided error for 'Nothing'.
 --

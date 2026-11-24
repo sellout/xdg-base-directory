@@ -112,7 +112,7 @@ import safe "this" XDG.BaseDirectory.IO qualified as XDG
 -- >>> import "base" System.IO (IO)
 -- >>> import "pathway" Data.Path (toText)
 -- >>> import "pathway" Data.Path.TH (posix)
--- >>> import qualified "pathway" Data.Path.Format as Format
+-- >>> import "pathway" Data.Path.Format qualified as Format
 -- >>> import "pathway-compat-temporary" System.IO.Temp.Overlay (createTempDirectory, getCanonicalTemporaryDirectory)
 -- >>> import "pathway-system" System.Path (createDirectoryWithParentsIfMissing)
 --
@@ -350,10 +350,10 @@ type role Operations representational nominal
 -- Right (NotBut (Right {handle: .../home/test-user/.local/state/myprogram-archive.db}))
 --
 -- >>> withAggregateFiles xdgOps Config [posix|myprogram-settings.dhall|] $ pure . fmap snd
--- NotBut (Noted (DoesNotExistError .../etc/xdg/myprogram-settings.dhall: openFile: does not exist (No such file or directory) :| [DoesNotExistError .../home/test-user/.config/myprogram-settings.dhall: openFile: does not exist (No such file or directory)]) [])
+-- NotBut (Noted (DoesNotExistError .../home/test-user/.config/myprogram-settings.dhall: openFile: does not exist (No such file or directory) :| [DoesNotExistError .../etc/xdg/myprogram-settings.dhall: openFile: does not exist (No such file or directory)]) [])
 --
 -- >>> withAggregateFiles xdgOps Data [posix|resources/splash.png|] $ pure . fmap snd
--- NotBut (Noted (DoesNotExistError .../usr/share/resources/splash.png: openFile: does not exist (No such file or directory) :| [DoesNotExistError .../home/test-user/.local/share/resources/splash.png: openFile: does not exist (No such file or directory)]) [])
+-- NotBut (Noted (DoesNotExistError .../home/test-user/.local/share/resources/splash.png: openFile: does not exist (No such file or directory) :| [DoesNotExistError .../usr/share/resources/splash.png: openFile: does not exist (No such file or directory)]) [])
 --
 -- >>> withUserTargetFile xdgOps Config [posix|settings.dhall|] False $ const pure
 -- Right (NotBut {handle: .../home/test-user/.config/settings.dhall})
@@ -413,10 +413,10 @@ bleedingOperations runtimeFallback =
 -- Right {handle: .../var/run/user/0/myprogram/some-temp-file.txt}
 --
 -- >>> withAggregateFiles myprogram Config [posix|settings.dhall|] $ pure . fmap snd
--- NotBut (Noted (DoesNotExistError .../etc/xdg/myprogram/settings.dhall: openFile: does not exist (No such file or directory) :| [DoesNotExistError .../home/test-user/.config/myprogram/settings.dhall: openFile: does not exist (No such file or directory)]) [])
+-- NotBut (Noted (DoesNotExistError .../home/test-user/.config/myprogram/settings.dhall: openFile: does not exist (No such file or directory) :| [DoesNotExistError .../etc/xdg/myprogram/settings.dhall: openFile: does not exist (No such file or directory)]) [])
 --
 -- >>> withAggregateFiles myprogram Data [posix|resources/splash.png|] $ pure . fmap snd
--- NotBut (Noted (DoesNotExistError .../usr/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory) :| [DoesNotExistError .../home/test-user/.local/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory)]) [])
+-- NotBut (Noted (DoesNotExistError .../home/test-user/.local/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory) :| [DoesNotExistError .../usr/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory)]) [])
 --
 -- >>> withUserTargetFile myprogram Config [posix|settings.dhall|] False $ const pure
 -- Right (NotBut {handle: .../home/test-user/.config/myprogram/settings.dhall})

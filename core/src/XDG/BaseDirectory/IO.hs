@@ -128,11 +128,12 @@ import safe "this" XDG.BaseDirectory.Internal (BaseDirectory, Error, VarError)
 -- >>> import "base" Data.Bool (Bool (True))
 -- >>> import "base" Data.Function (const)
 -- >>> import "base" Data.String (String)
--- >>> import "base" Data.Tuple (snd)
+-- >>> import "base" Data.Tuple (fst, snd)
 -- >>> import "base" System.Environment (getEnv, setEnv)
 -- >>> import "pathway" Data.Path (toText)
 -- >>> import "pathway" Data.Path.TH (posix)
--- >>> import qualified "pathway" Data.Path.Format as Format
+-- >>> import "pathway" Data.Path.Format qualified as Format
+-- >>> import "pathway-compat-base" System.IO.Thin (writeFile)
 -- >>> import "pathway-compat-directory" System.Directory.Overlay (getHomeDirectory)
 -- >>> import "pathway-compat-temporary" System.IO.Temp.Overlay (createTempDirectory, getCanonicalTemporaryDirectory)
 -- >>> import "pathway-system" System.Path (createDirectoryWithParentsIfMissing)
@@ -506,7 +507,7 @@ foldDirs filename action dirs =
 --     [posix|myprogram/settings.dhall|]
 --     $ pure . fmap snd
 -- :}
--- NotBut (Noted (DoesNotExistError .../etc/xdg/myprogram/settings.dhall: openFile: does not exist (No such file or directory) :| [DoesNotExistError .../home/test-user/.config/myprogram/settings.dhall: openFile: does not exist (No such file or directory)]) [])
+-- NotBut (Noted (DoesNotExistError .../home/test-user/.config/myprogram/settings.dhall: openFile: does not exist (No such file or directory) :| [DoesNotExistError .../etc/xdg/myprogram/settings.dhall: openFile: does not exist (No such file or directory)]) [])
 --
 -- >>> :{
 --   withAggregateFiles @IO @String
@@ -514,7 +515,30 @@ foldDirs filename action dirs =
 --     [posix|myprogram/resources/splash.png|]
 --     $ pure . fmap snd
 -- :}
--- NotBut (Noted (DoesNotExistError .../usr/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory) :| [DoesNotExistError .../home/test-user/.local/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory)]) [])
+-- NotBut (Noted (DoesNotExistError .../home/test-user/.local/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory) :| [DoesNotExistError .../usr/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory)]) [])
+--
+--   When the file exists in more than one base directory, they are provided to
+--   the action in order of decreasing importance, so that an action that wants
+--   only one of them can take the head and an action that wants to merge them
+--   should be left-biased.
+--
+-- >>> :{
+--   let dotConfig = tempHome </> [posix|.config/|]
+--       etcXdg = tempRoot </> [posix|etc/xdg/|]
+--    in do
+--         _ <- createDirectoryWithParentsIfMissing dotConfig
+--         _ <- createDirectoryWithParentsIfMissing etcXdg
+--         writeFile (dotConfig </> [posix|precedence.txt|]) "user"
+--         writeFile (etcXdg </> [posix|precedence.txt|]) "system"
+-- :}
+--
+-- >>> :{
+--   withAggregateFiles @IO @String
+--     Config
+--     [posix|precedence.txt|]
+--     $ pure . fmap (toText Format.local . fst)
+-- :}
+-- NotBut (NotBut [".../home/test-user/.config/precedence.txt",".../etc/xdg/precedence.txt"])
 --
 -- @since 99999
 withAggregateFiles ::

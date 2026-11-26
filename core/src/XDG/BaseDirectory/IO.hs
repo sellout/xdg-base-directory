@@ -639,7 +639,7 @@ withUserTargetFile aggregate filename truncate action =
 --            @XDG_CONFIG_DIRS@, respectively).
 --
 -- >>> withSystemTargetFile @IO @String Config [posix|myprogram/settings.dhall|] False $ const pure
--- NotBut (Right {handle: .../etc/myprogram/settings.dhall})
+-- NotBut (Right {handle: .../etc/xdg/myprogram/settings.dhall})
 --
 -- @since 99999
 withSystemTargetFile ::

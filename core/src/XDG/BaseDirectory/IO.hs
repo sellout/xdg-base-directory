@@ -56,6 +56,7 @@ module XDG.BaseDirectory.IO
     AggregateDirWarnings,
     IOWriteMode (..),
     InvalidRuntimeDir (..),
+    OpenFileFailures,
     SystemDirWarnings,
     WithFileFailure,
     withUserFile,
@@ -73,18 +74,18 @@ import safe "base" Control.Applicative (liftA2, pure)
 import safe "base" Control.Category ((.))
 import safe "base" Control.Monad (join, (<=<), (=<<))
 import safe "base" Control.Monad.IO.Class (MonadIO, liftIO)
-import safe "base" Data.Bifunctor (first)
+import safe "base" Data.Bifunctor (bimap, first)
 import safe "base" Data.Bool (Bool (False), bool)
-import safe "base" Data.Either (Either (Left), either)
+import safe "base" Data.Either (Either (Left), either, partitionEithers)
 import safe "base" Data.Eq (Eq)
-import safe "base" Data.Foldable (Foldable, foldr, toList)
+import safe "base" Data.Foldable (Foldable, toList)
 import safe "base" Data.Function (($))
 import safe "base" Data.Functor (Functor, fmap, (<$>))
 import safe "base" Data.Functor.Compose (Compose (Compose), getCompose)
 import safe "base" Data.Kind qualified as Kind
 import safe "base" Data.List.NonEmpty (NonEmpty)
 import safe "base" Data.List.NonEmpty qualified as NonEmpty
-import safe "base" Data.Maybe (Maybe (Nothing))
+import safe "base" Data.Maybe (Maybe (Nothing), maybe)
 import safe "base" Data.Ord (Ord)
 import safe "base" Data.Traversable (Traversable, sequenceA, traverse)
 import safe "base" Data.Tuple (curry, uncurry)
@@ -102,6 +103,7 @@ import safe "pathway-compat-base" System.IO.Pathway (OpenFileFailure)
 import safe "pathway-system" System.Path qualified as Path
 import safe "pathway-system" System.Text qualified as Text
 import safe "these" Data.These (These (That, These, This))
+import safe "transformers" Control.Monad.Trans.Cont (ContT (ContT), runContT)
 import "variant" Data.Variant (V, liftVariant, toVariant, (:<))
 import "variant" Data.Variant.Types (Concat)
 import safe "yaya" Yaya.Pattern (AndMaybe (Indeed, Only))
@@ -207,6 +209,13 @@ type AggregateDirWarnings rep =
     -- failed to get the user directory
     (Error rep `AndMaybe` V (Path.GetUserDirectoryFailure rep))
     (SystemDirWarnings rep)
+
+-- | The files we tried to open and couldn’t, each paired with its failure.
+--
+-- @since 99999
+type OpenFileFailures :: Kind.Type -> Kind.Type
+type OpenFileFailures rep =
+  NonEmpty (Path 'Abs 'File rep, V OpenFileFailure)
 
 consAggregate ::
   Either
@@ -467,26 +476,45 @@ withUserFileRO user filename action =
     <=< liftIO
     $ resolveUser user
 
--- | Apply an action to the same file in each directory.
+-- | Apply an action to the same file in each directory,
+--
+--   This decides nothing about what a missing file means — that is the
+--   caller’s to decide, per directory. `foldDirs` is this with a policy that
+--   reports & discards missing files.
+foldDirs' ::
+  forall m rep a.
+  (MonadIO m, MonadMask m, Path.Rep rep) =>
+  Path ('Rel 'False) 'File rep ->
+  -- | The action to perform on the files. The argument list corresponds 1-to-1
+  --   with the provided directories, so the action can introspect which ones
+  --   failed and how to handle it. For the common case of just ignoring missing
+  --   files and operating on the rest, see `foldDirs`.
+  ([(Path 'Abs 'File rep, Either (V OpenFileFailure) Handle)] -> m a) ->
+  [BaseDirectory rep] ->
+  m a
+foldDirs' filename action = (`runContT` action) . traverse (ContT . act)
+  where
+    act dir singleAction =
+      either (singleAction . (dir </> filename,) . Left) pure
+        =<< withFileRO filename (\p -> singleAction . (p,) . pure) dir
+
+-- | Apply an action to the same file in each directory, ignoring any files that
+--   can’t be opened.
 foldDirs ::
+  forall m rep a.
   (MonadIO m, MonadMask m, Path.Rep rep) =>
   Path ('Rel 'False) 'File rep ->
   ([(Path 'Abs 'File rep, Handle)] -> m a) ->
   [BaseDirectory rep] ->
-  -- |
-  --
-  --  __FIXME__: Rewrite this so we have a @`These` (`NonEmpty` `IOError`)@ at the end.
-  m (Annotated (NonEmpty (V OpenFileFailure)) a)
-foldDirs filename action dirs =
-  foldr
-    ( \dir act others ->
-        -- FIXME: Ensure this `Noted` isn’t discarding the other annotations.
-        either (\e -> (Noted (pure e) =<<) <$> act others) pure
-          =<< withFileRO filename (\p -> act . (: others) . (p,)) dir
-    )
-    (fmap pure . action)
-    dirs
-    []
+  m (Annotated (OpenFileFailures rep) a)
+foldDirs filename action =
+  foldDirs' filename $
+    uncurry
+      ( \failures ->
+          fmap (maybe NotBut Noted $ NonEmpty.nonEmpty failures) . action
+      )
+      . partitionEithers
+      . fmap (uncurry $ liftA2 bimap (,) (,))
 
 -- | Open all of the associated files.
 --
@@ -507,7 +535,7 @@ foldDirs filename action dirs =
 --     [posix|myprogram/settings.dhall|]
 --     $ pure . fmap snd
 -- :}
--- NotBut (Noted (DoesNotExistError .../home/test-user/.config/myprogram/settings.dhall: openFile: does not exist (No such file or directory) :| [DoesNotExistError .../etc/xdg/myprogram/settings.dhall: openFile: does not exist (No such file or directory)]) [])
+-- NotBut (Noted ((...,DoesNotExistError .../home/test-user/.config/myprogram/settings.dhall: openFile: does not exist (No such file or directory)) :| [(...,DoesNotExistError .../etc/xdg/myprogram/settings.dhall: openFile: does not exist (No such file or directory))]) [])
 --
 -- >>> :{
 --   withAggregateFiles @IO @String
@@ -515,7 +543,7 @@ foldDirs filename action dirs =
 --     [posix|myprogram/resources/splash.png|]
 --     $ pure . fmap snd
 -- :}
--- NotBut (Noted (DoesNotExistError .../home/test-user/.local/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory) :| [DoesNotExistError .../usr/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory)]) [])
+-- NotBut (Noted ((...,DoesNotExistError .../home/test-user/.local/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory)) :| [(...,DoesNotExistError .../usr/share/myprogram/resources/splash.png: openFile: does not exist (No such file or directory))]) [])
 --
 --   When the file exists in more than one base directory, they are provided to
 --   the action in order of decreasing importance, so that an action that wants
@@ -549,12 +577,14 @@ withAggregateFiles ::
   Path ('Rel 'False) 'File rep ->
   -- | An action that is given the list of handles we are reading from. The
   --   handles are in order of decreasing importance, so the ones after the
-  --   first can be dropped, or otherwise have earlier ones layered on them.
+  --   first can be dropped, or otherwise have earlier ones layered on them. The
+  --   result is annotated with the files we couldn’t open.
   ([(Path 'Abs 'File rep, Handle)] -> m a) ->
   -- |
   --
-  --  __FIXME__: Don’t nest `Aggregated`, instead combine the per-file errors in one level.
-  m (Annotated (AggregateDirWarnings rep) (Annotated (NonEmpty (V OpenFileFailure)) a))
+  --  __TODO__: Don’t nest `Aggregated`, instead combine the per-file errors in
+  --            one level.
+  m (Annotated (AggregateDirWarnings rep) (Annotated (OpenFileFailures rep) a))
 withAggregateFiles aggregate filename action =
   traverse (foldDirs filename action . toList)
     <=< liftIO

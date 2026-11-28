@@ -264,7 +264,16 @@ resolveSystemAggregate ::
   Aggregate ->
   IO (Annotated (Error rep) (BaseDirectory rep))
 resolveSystemAggregate = \case
-  Config -> sysconfdir
+  --     Default configuration files should be installed to
+  --     @$sysconfdir@/xdg/subdir/filename with @$sysconfdir@ defaulting to
+  --     /etc.
+  --     —[§4](https://specifications.freedesktop.org/basedir-spec/latest/#referencing)
+  Config ->
+    (\subdir -> fmap (`Directory.descendTo` subdir) <$> sysconfdir)
+      =<< Text.encodeString "xdg"
+  --     Such file should be installed to @$datadir@/subdir/filename with
+  --     @$datadir@ defaulting to /usr/share.
+  --     —[§4](https://specifications.freedesktop.org/basedir-spec/latest/#referencing)
   Data -> datadir
 
 -- | This effectively checks some input against a function, and then returns the
